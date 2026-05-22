@@ -19,7 +19,7 @@ let jsonMode = false;
 program
   .name("codex-config")
   .description("Idempotently apply config.toml.template to ~/.codex/config.toml.")
-  .version("0.1.0")
+  .version("0.2.0")
   .option("--json", "print machine-readable JSON");
 
 program
@@ -27,7 +27,7 @@ program
   .description("Apply the template to the target config.")
   .option("--target <path>", "target config.toml path")
   .option("--template <path>", "template config.toml path")
-  .option("--override-all", "overwrite template-covered keys that already exist")
+  .option("-f, --force", "overwrite template-covered keys that already exist")
   .option("--dry-run", "show planned changes without writing")
   .option("--json", "print machine-readable JSON")
   .action(async (options: CliOptions) => {
@@ -41,7 +41,7 @@ program
   .description("Show whether applying the template would change the target.")
   .option("--target <path>", "target config.toml path")
   .option("--template <path>", "template config.toml path")
-  .option("--override-all", "compare using override-all behavior")
+  .option("-f, --force", "compare using force behavior")
   .option("--json", "print machine-readable JSON")
   .action(async (options: CliOptions) => {
     jsonMode = shouldUseJson(options);
@@ -54,7 +54,7 @@ program
   .description("Exit nonzero when the target is not up to date with the template.")
   .option("--target <path>", "target config.toml path")
   .option("--template <path>", "template config.toml path")
-  .option("--override-all", "check using override-all behavior")
+  .option("-f, --force", "check using force behavior")
   .option("--json", "print machine-readable JSON")
   .action(async (options: CliOptions) => {
     jsonMode = shouldUseJson(options);

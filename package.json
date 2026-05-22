@@ -1,6 +1,6 @@
 {
   "name": "codex-config",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Idempotently apply a Codex config.toml template without overwriting user-owned settings.",
   "type": "module",
   "license": "MIT",

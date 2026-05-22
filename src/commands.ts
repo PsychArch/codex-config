@@ -7,7 +7,7 @@ import { planConfigChange, validateToml, type ChangeOperation, type MergeMode } 
 export interface CommandOptions {
   target?: string;
   template?: string;
-  overrideAll?: boolean;
+  force?: boolean;
 }
 
 export interface ApplyOptions extends CommandOptions {
@@ -116,7 +116,7 @@ function resolvePaths(options: CommandOptions): { target: string; template: stri
 }
 
 function modeFromOptions(options: CommandOptions): MergeMode {
-  return options.overrideAll ? "override" : "missing";
+  return options.force ? "override" : "missing";
 }
 
 export function formatTextResult(command: "apply" | "diff" | "check", result: CommandResult): string {

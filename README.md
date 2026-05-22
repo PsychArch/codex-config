@@ -4,7 +4,7 @@ Apply a `config.toml.template` to `~/.codex/config.toml` without taking over the
 
 By default, `codex-config` only adds template options that are missing. Existing options stay unchanged, and unrelated tables such as `[mcp_servers.*]`, `[model_providers.*]`, `[notice]`, and `[projects.*]` are preserved.
 
-Use `--override-all` to reset template-covered options to the template values.
+Use `-f` to reset template-covered options to the template values.
 
 ## Run
 
@@ -17,7 +17,7 @@ npx codex-config apply
 ```bash
 npx codex-config apply
 npx codex-config apply --dry-run
-npx codex-config apply --override-all
+npx codex-config apply -f
 npx codex-config diff
 npx codex-config check
 npx codex-config doctor
@@ -34,7 +34,7 @@ Options:
 
 - `--target PATH`: target config path, default `~/.codex/config.toml`
 - `--template PATH`: template path, default bundled template
-- `--override-all`: overwrite template-covered keys
+- `-f, --force`: overwrite template-covered keys
 - `--json`: print JSON output
 
 One-shot vibe coded by Codex.

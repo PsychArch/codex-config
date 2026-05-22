@@ -6,21 +6,28 @@ By default, `codex-config` only adds template options that are missing. Existing
 
 Use `--override-all` to reset template-covered options to the template values.
 
-## Install
+## Run
 
 ```bash
-npm install -g codex-config
+npx codex-config apply
 ```
 
 ## Usage
 
 ```bash
+npx codex-config apply
+npx codex-config apply --dry-run
+npx codex-config apply --override-all
+npx codex-config diff
+npx codex-config check
+npx codex-config doctor
+```
+
+Optional global install:
+
+```bash
+npm install -g codex-config
 codex-config apply
-codex-config apply --dry-run
-codex-config apply --override-all
-codex-config diff
-codex-config check
-codex-config doctor
 ```
 
 Options:
@@ -29,3 +36,5 @@ Options:
 - `--template PATH`: template path, default bundled template
 - `--override-all`: overwrite template-covered keys
 - `--json`: print JSON output
+
+One-shot vibe coded by Codex.

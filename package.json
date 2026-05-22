@@ -1,0 +1,46 @@
+{
+  "name": "codex-config",
+  "version": "0.1.0",
+  "description": "Idempotently apply a Codex config.toml template without overwriting user-owned settings.",
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.4",
+  "bin": {
+    "codex-config": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "config.toml.template",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "smol-toml": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  },
+  "keywords": [
+    "codex",
+    "config",
+    "toml",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PsychArch/codex-config.git"
+  }
+}

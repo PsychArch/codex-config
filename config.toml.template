@@ -1,0 +1,32 @@
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+model_reasoning_effort = "high"
+plan_mode_reasoning_effort = "high"
+web_search = "live"
+model = "gpt-5.5"
+#model_context_window = 1050000
+personality = "friendly"
+# model_reasoning_summary options: "auto", "concise", "detailed", "none"
+model_reasoning_summary = "concise"
+service_tier = "fast"
+suppress_unstable_features_warning = true
+
+[analytics]
+enabled = false
+
+[features]
+multi_agent = true
+image_detail_original = true
+memories = true
+terminal_resize_reflow = true
+goals = true
+
+[tui]
+alternate_screen = "never"
+status_line = ["model-with-reasoning", "project-name", "context-used", "weekly-limit", "fast-mode", "five-hour-limit"]
+terminal_title = ["spinner", "project", "status", "task-progress"]
+
+[memories]
+use_memories = true
+generate_memories = true
+

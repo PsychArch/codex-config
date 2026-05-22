@@ -6,7 +6,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.33.4",
   "bin": {
-    "codex-config": "./dist/cli.js"
+    "codex-config": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -41,6 +41,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/PsychArch/codex-config.git"
+    "url": "git+https://github.com/PsychArch/codex-config.git"
   }
 }

@@ -10,7 +10,7 @@ export interface PlanConfigChangeOptions {
 }
 
 export interface ChangeOperation {
-  action: "create" | "add" | "update";
+  action: "create" | "add" | "update" | "remove";
   path: string;
 }
 
@@ -143,6 +143,46 @@ export function planConfigChange(options: PlanConfigChangeOptions): ConfigChange
 
 export function validateToml(text: string, label: string): void {
   parseToml(text, label);
+}
+
+export function planConfigRemovals(
+  targetText: string,
+  paths: ReadonlyArray<ReadonlyArray<string>>,
+): ConfigChangePlan {
+  const normalizedTarget = normalizeNewlines(targetText);
+  const targetParsed = parseToml(normalizedTarget, "target");
+  const targetScan = scanToml(normalizedTarget, false);
+  const operations: ChangeOperation[] = [];
+  const mutations: Mutation[] = [];
+
+  for (const readonlyPath of paths) {
+    const path = [...readonlyPath];
+    if (!hasPath(targetParsed, path)) {
+      continue;
+    }
+    const targetEntry = targetScan.entryByPath.get(pathKey(path));
+    if (!targetEntry) {
+      throw new Error(
+        `Cannot remove ${formatPath(path)} because it is not represented as a standalone TOML key.`,
+      );
+    }
+    mutations.push({ start: targetEntry.start, end: targetEntry.end, lines: [] });
+    operations.push({ action: "remove", path: formatPath(path) });
+  }
+
+  if (mutations.length === 0) {
+    return {
+      changed: false,
+      outputText: ensureTrailingNewline(normalizedTarget),
+      operations,
+    };
+  }
+
+  return {
+    changed: true,
+    outputText: ensureTrailingNewline(applyMutations(targetScan.lines, mutations).join("\n")),
+    operations,
+  };
 }
 
 function parseToml(text: string, label: string): unknown {

@@ -18,14 +18,15 @@ let jsonMode = false;
 
 program
   .name("codex-config")
-  .description("Idempotently apply config.toml.template to ~/.codex/config.toml.")
-  .version("0.2.0")
+  .description("Keep the active Codex config aligned with the supported GPT-5.6 family.")
+  .version("0.3.0")
   .option("--json", "print machine-readable JSON");
 
 program
   .command("apply")
   .description("Apply the template to the target config.")
   .option("--target <path>", "target config.toml path")
+  .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
   .option("-f, --force", "overwrite template-covered keys that already exist")
   .option("--dry-run", "show planned changes without writing")
@@ -40,6 +41,7 @@ program
   .command("diff")
   .description("Show whether applying the template would change the target.")
   .option("--target <path>", "target config.toml path")
+  .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
   .option("-f, --force", "compare using force behavior")
   .option("--json", "print machine-readable JSON")
@@ -53,6 +55,7 @@ program
   .command("check")
   .description("Exit nonzero when the target is not up to date with the template.")
   .option("--target <path>", "target config.toml path")
+  .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
   .option("-f, --force", "check using force behavior")
   .option("--json", "print machine-readable JSON")
@@ -67,8 +70,9 @@ program
 
 program
   .command("doctor")
-  .description("Validate default paths and TOML parser readiness.")
+  .description("Validate the target against the pinned Codex schema and GPT-5.6 policy.")
   .option("--target <path>", "target config.toml path")
+  .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
   .option("--json", "print machine-readable JSON")
   .action(async (options: CliOptions) => {

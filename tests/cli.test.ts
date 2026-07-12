@@ -151,6 +151,79 @@ view_image_tool = true
     expect(doctor.ok).toBe(true);
     expect(doctor.target.clean).toBe(true);
   });
+
+  test("default output focuses on the config and groups understandable changes", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-output-"));
+    const templatePath = join(directory, "config.toml.template");
+    const targetPath = join(directory, "config.toml");
+
+    await writeFile(
+      templatePath,
+      `model = "gpt-5.6-sol"
+default_permissions = ":danger-full-access"
+
+[features]
+memories = true
+`,
+      "utf8",
+    );
+    await writeFile(
+      targetPath,
+      `model = "gpt-5.5"
+personality = "friendly"
+`,
+      "utf8",
+    );
+
+    const { stdout } = await runCli([
+      "apply",
+      "--dry-run",
+      "--template",
+      templatePath,
+      "--target",
+      targetPath,
+    ]);
+
+    expect(stdout).toContain(`Codex config would be updated.\n  ${targetPath}`);
+    expect(stdout).toContain("Added settings:\n  - default_permissions\n  - features.memories");
+    expect(stdout).toContain("Updated settings:\n  - model");
+    expect(stdout).toContain("Removed obsolete settings:\n  - personality");
+    expect(stdout).not.toContain(templatePath);
+    expect(stdout).not.toContain("mode:");
+  });
+
+  test("already-current output is concise", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-output-"));
+    const templatePath = join(directory, "config.toml.template");
+    const targetPath = join(directory, "config.toml");
+    await writeFile(templatePath, 'model = "gpt-5.6-sol"\n', "utf8");
+    await writeFile(targetPath, 'model = "gpt-5.6-sol"\n', "utf8");
+
+    const { stdout } = await runCli([
+      "apply",
+      "--template",
+      templatePath,
+      "--target",
+      targetPath,
+    ]);
+
+    expect(stdout).toBe(`Codex config is already up to date.\n  ${targetPath}\n`);
+  });
+
+  test("doctor explains a missing config and exits nonzero", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-doctor-"));
+    const templatePath = join(directory, "config.toml.template");
+    const targetPath = join(directory, "missing.toml");
+    await writeFile(templatePath, 'model = "gpt-5.6-sol"\n', "utf8");
+
+    await expect(
+      runCli(["doctor", "--template", templatePath, "--target", targetPath]),
+    ).rejects.toMatchObject({
+      stdout: expect.stringContaining(
+        `Codex config needs attention.\n  ${targetPath}\n\nConfig file not found.`,
+      ),
+    });
+  });
 });
 
 function runCli(

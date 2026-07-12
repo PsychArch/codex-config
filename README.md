@@ -1,76 +1,73 @@
 # codex-config
 
-Keep the active Codex `config.toml` current for the GPT-5.6 model family while preserving unrelated user settings such as MCP servers, projects, providers, and notices. The default target is `$CODEX_HOME/config.toml`, with `~/.codex/config.toml` used when `CODEX_HOME` is unset.
+Keep your Codex configuration up to date as Codex evolves.
 
-The bundled configuration defaults to `gpt-5.6-sol`. The supported models are:
+`codex-config` updates the active `config.toml` to the supported Codex configuration shape and applies a curated set of recommended settings. It is safe to run after every Codex upgrade: repeated runs produce the same result.
 
-- `gpt-5.6-sol`
-- `gpt-5.6-terra`
-- `gpt-5.6-luna`
+It:
 
-GPT-5.6 models carry their own personality instructions and do not expose a selectable personality placeholder. `codex-config` therefore removes the ineffective top-level `personality` setting.
+- adds recommended settings that are missing;
+- migrates obsolete settings to their current equivalents;
+- preserves your existing choices and unrelated configuration, including MCP servers, projects, providers, and notices;
+- validates the result against the bundled Codex schema before writing it.
 
-The template explicitly opts into memories. Newly stable Codex capabilities such as multi-agent, goals, image generation, plugins, and tool search behavior are left at their source defaults, so the config does not pin redundant feature flags. Under-development features are not enabled automatically.
+## Quick start
 
-Package release versions track the Codex CLI version used for live compatibility testing.
+Requires Node.js 22 or later.
 
-## Apply
+Package versions follow the Codex CLI version used for compatibility testing.
 
 ```bash
-pnpm dlx codex-config apply
+pnpm --silent dlx codex-config@latest apply
 ```
 
-By default, missing template settings are added and existing values are preserved, except for compatibility migrations required by the GPT-5.6 target:
+This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run the same command again whenever you upgrade Codex.
 
-- unsupported models are changed to `gpt-5.6-sol`;
-- `sandbox_mode` is converted to its equivalent `default_permissions` profile;
-- `personality`, Codex feature flags marked as removed, and historical flags deleted from the source catalog are deleted;
-- legacy feature aliases are renamed, and old web-search toggles become the top-level `web_search` mode;
-- legacy status-line and terminal-title identifiers are canonicalized.
-
-Use a dry run to inspect these operations before writing:
+To review the changes first:
 
 ```bash
-pnpm dlx codex-config apply --dry-run
+pnpm --silent dlx codex-config@latest apply --dry-run
 ```
 
-Use `-f` to reset every template-covered setting to the bundled value. Supported model selections such as Terra or Luna are otherwise preserved.
+## Recommended configuration
+
+The bundled recommendations currently select `gpt-5.6-sol`, high reasoning effort, live web search, the fast service tier, memories, disabled analytics, and a useful terminal status display. They also configure Codex for unrestricted local access without approval prompts. Review the exact values in [`config.toml.template`](config.toml.template) before applying them if that permission level is not appropriate for your environment.
+
+By default, existing values are kept. Compatibility migrations are still applied when an old setting is no longer valid—for example, legacy sandbox permissions, feature aliases, retired feature flags, web-search flags, and terminal display identifiers. Unsupported model selections move to the current default, while supported GPT-5.6 selections are preserved.
+
+Use `--force` only when you want every setting managed by `codex-config` reset to its recommended value:
 
 ```bash
-pnpm dlx codex-config apply -f
+pnpm --silent dlx codex-config@latest apply --force
 ```
 
-## Inspect
+## Check your configuration
 
 ```bash
-pnpm dlx codex-config diff
-pnpm dlx codex-config check
-pnpm dlx codex-config doctor
+# Show pending changes without writing
+pnpm --silent dlx codex-config@latest diff
+
+# Exit with status 1 when an update is needed
+pnpm --silent dlx codex-config@latest check
+
+# Validate the current config and report compatibility issues
+pnpm --silent dlx codex-config@latest doctor
 ```
 
-`doctor` validates TOML against the bundled Codex JSON Schema and reports the exact Codex source revision, supported models, removed, retired, or deprecated features, and non-canonical settings. Add `--json` to any command for machine-readable output.
+All commands support `--json` for machine-readable output.
 
-## Profiles
+## Profiles and custom paths
 
-Current Codex profiles are separate config layers named `$CODEX_HOME/<name>.config.toml`. Apply or inspect one directly with the matching option:
+Codex profiles use separate files under `$CODEX_HOME`:
 
 ```bash
-pnpm dlx codex-config apply --profile work
-pnpm dlx codex-config doctor --profile work
+pnpm --silent dlx codex-config@latest apply --profile work
 codex --profile work
 ```
 
-The older top-level `profile` selector and `[profiles.<name>]` tables are no longer consumed by current Codex. `doctor` reports them with migration guidance, but does not delete or split that user-owned data automatically.
+Use `--target /path/to/config.toml` to manage another file. Use `--template /path/to/template.toml` to supply your own recommendations.
 
-Options:
-
-- `--target PATH`: explicit target config path
-- `-p, --profile NAME`: target `$CODEX_HOME/<name>.config.toml`; cannot be combined with `--target`
-- `--template PATH`: template path, default bundled template
-- `-f, --force`: overwrite template-covered settings
-- `--json`: print JSON output
-
-Optional global installation:
+## Install globally
 
 ```bash
 pnpm add --global codex-config
@@ -81,10 +78,15 @@ codex-config apply
 
 ```bash
 pnpm install
-pnpm sync:codex -- --source /path/to/codex
 pnpm test
 pnpm run check
 pnpm run build
 ```
 
-`sync:codex` snapshots `config.schema.json`, the GPT-5.6 model capabilities (including minimum client version, reasoning efforts, service tiers, and personality support), and feature lifecycle metadata from the selected Codex checkout. It also reads the full first-parent feature history to retain migrations for keys that Codex deleted outright, so the source checkout must not be shallow. Commit the generated changes together so validation and migrations target one source revision.
+Maintainers can refresh the bundled schema and Codex compatibility metadata from a Codex source checkout with:
+
+```bash
+pnpm sync:codex -- --source /path/to/codex
+```
+
+The source checkout must include full first-parent history so retired configuration keys can be detected.

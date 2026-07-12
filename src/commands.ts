@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { planCodexMigrations } from "./codex-migrations.js";
 import {
@@ -125,7 +126,8 @@ export async function doctor(options: CommandOptions): Promise<DoctorResult> {
       templateExists &&
       templateInspection.valid &&
       templateInspection.clean &&
-      (!targetInspection || (targetInspection.valid && targetInspection.clean)),
+      targetExists &&
+      Boolean(targetInspection?.valid && targetInspection.clean),
     codex: {
       sourceRevision: CODEX_TARGET.sourceRevision,
       sourceCommitDate: CODEX_TARGET.sourceCommitDate,
@@ -215,53 +217,115 @@ function modeFromOptions(options: CommandOptions): MergeMode {
 
 export function formatTextResult(command: "apply" | "diff" | "check", result: CommandResult): string {
   const lines: string[] = [];
+  const createsConfig = result.operations.some((operation) => operation.action === "create");
   if (command === "apply") {
     if (result.dryRun) {
-      lines.push(result.changed ? "Changes would be applied." : "Already up to date.");
+      lines.push(
+        result.changed
+          ? createsConfig
+            ? "Codex config would be created."
+            : "Codex config would be updated."
+          : "Codex config is already up to date.",
+      );
     } else {
-      lines.push(result.changed ? "Config updated." : "Already up to date.");
+      lines.push(
+        result.changed
+          ? createsConfig
+            ? "Codex config created."
+            : "Codex config updated."
+          : "Codex config is already up to date.",
+      );
     }
   } else if (command === "check") {
-    lines.push(result.changed ? "Config is not up to date." : "Config is up to date.");
+    lines.push(
+      result.changed ? "Codex config is not up to date." : "Codex config is up to date.",
+    );
   } else {
-    lines.push(result.changed ? "Changes found." : "No changes.");
+    lines.push(
+      result.changed ? "Codex config has pending updates." : "Codex config is up to date.",
+    );
   }
 
-  lines.push(`target: ${result.target}`);
-  lines.push(`template: ${result.template}`);
-  lines.push(`mode: ${result.mode}`);
-  for (const operation of result.operations) {
-    lines.push(`${operation.action}: ${operation.path}`);
+  lines.push(`  ${displayPath(result.target)}`);
+  if (result.changed) {
+    lines.push(...formatOperationGroups(result.operations));
   }
   return `${lines.join("\n")}\n`;
 }
 
 export function formatDoctorText(result: DoctorResult): string {
   const lines = [
-    result.ok ? "codex-config is ready." : "codex-config is not ready.",
-    `Codex source: ${result.codex.sourceRevision}`,
-    `minimum Codex version: ${result.codex.minimumClientVersion}`,
-    `default model: ${result.codex.defaultModel}`,
-    `supported models: ${result.codex.supportedModels.join(", ")}`,
-    `target: ${result.target.path}`,
-    `target exists: ${String(result.target.exists)}`,
-    `target valid TOML: ${String(result.target.validToml)}`,
-    `target compatible: ${String(result.target.compatible)}`,
-    `target clean: ${String(result.target.clean)}`,
-    `template: ${result.template.path}`,
-    `template exists: ${String(result.template.exists)}`,
-    `template valid TOML: ${String(result.template.validToml)}`,
-    `template compatible: ${String(result.template.compatible)}`,
-    `template clean: ${String(result.template.clean)}`,
-    "auth required: false",
+    result.ok ? "Codex config looks good." : "Codex config needs attention.",
+    `  ${displayPath(result.target.path)}`,
   ];
-  for (const issue of result.target.issues) {
-    lines.push(`${issue.severity}: target${issue.path ? `.${issue.path}` : ""}: ${issue.message}`);
+
+  if (!result.target.exists) {
+    lines.push("", "Config file not found.", "Run: codex-config apply");
   }
-  for (const issue of result.template.issues) {
-    lines.push(`${issue.severity}: template${issue.path ? `.${issue.path}` : ""}: ${issue.message}`);
+
+  const targetIssues = formatIssueGroups(result.target.issues);
+  if (targetIssues.length > 0) {
+    lines.push(...targetIssues);
   }
+
+  const templateIssues = formatIssueGroups(result.template.issues, "Bundled recommendations");
+  if (!result.template.exists) {
+    lines.push("", "Bundled recommendations could not be found. Reinstall codex-config.");
+  } else if (templateIssues.length > 0) {
+    lines.push(...templateIssues);
+  }
+
+  if (result.ok) {
+    lines.push("", "No compatibility issues found.");
+  }
+
   return `${lines.join("\n")}\n`;
+}
+
+function formatOperationGroups(operations: ChangeOperation[]): string[] {
+  const groups: Array<{ action: ChangeOperation["action"]; heading: string }> = [
+    { action: "add", heading: "Added settings:" },
+    { action: "update", heading: "Updated settings:" },
+    { action: "remove", heading: "Removed obsolete settings:" },
+  ];
+  const lines: string[] = [];
+  for (const group of groups) {
+    const paths = operations
+      .filter((operation) => operation.action === group.action)
+      .map((operation) => operation.path);
+    if (paths.length === 0) {
+      continue;
+    }
+    lines.push("", group.heading, ...paths.map((path) => `  - ${path}`));
+  }
+  return lines;
+}
+
+function formatIssueGroups(issues: ConfigIssue[], label?: string): string[] {
+  const lines: string[] = [];
+  for (const severity of ["error", "warning"] as const) {
+    const matching = issues.filter((issue) => issue.severity === severity);
+    if (matching.length === 0) {
+      continue;
+    }
+    const heading = severity === "error" ? "Errors:" : "Warnings:";
+    lines.push("", label ? `${label} - ${heading}` : heading);
+    for (const issue of matching) {
+      lines.push(`  - ${issue.path ? `${issue.path}: ` : ""}${issue.message}`);
+    }
+  }
+  return lines;
+}
+
+function displayPath(path: string): string {
+  const home = homedir();
+  if (path === home) {
+    return "~";
+  }
+  if (path.startsWith(`${home}/`) || path.startsWith(`${home}\\`)) {
+    return `~${path.slice(home.length)}`;
+  }
+  return path;
 }
 
 export function targetDirectory(options: CommandOptions): string {

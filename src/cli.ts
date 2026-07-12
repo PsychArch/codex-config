@@ -24,13 +24,13 @@ const packageVersion = (
 
 program
   .name("codex-config")
-  .description("Keep the active Codex config aligned with the supported GPT-5.6 family.")
+  .description("Keep your Codex configuration up to date as Codex evolves.")
   .version(packageVersion)
   .option("--json", "print machine-readable JSON");
 
 program
   .command("apply")
-  .description("Apply the template to the target config.")
+  .description("Update Codex config with recommended settings.")
   .option("--target <path>", "target config.toml path")
   .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
@@ -45,7 +45,7 @@ program
 
 program
   .command("diff")
-  .description("Show whether applying the template would change the target.")
+  .description("Preview recommended updates without changing the config.")
   .option("--target <path>", "target config.toml path")
   .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
@@ -59,7 +59,7 @@ program
 
 program
   .command("check")
-  .description("Exit nonzero when the target is not up to date with the template.")
+  .description("Exit nonzero when the Codex config needs an update.")
   .option("--target <path>", "target config.toml path")
   .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")
@@ -76,7 +76,7 @@ program
 
 program
   .command("doctor")
-  .description("Validate the target against the pinned Codex schema and GPT-5.6 policy.")
+  .description("Check the Codex config for compatibility issues.")
   .option("--target <path>", "target config.toml path")
   .option("-p, --profile <name>", "target $CODEX_HOME/<name>.config.toml")
   .option("--template <path>", "template config.toml path")

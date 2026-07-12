@@ -72,6 +72,26 @@ memories = false
     expect(plan.outputText).toContain('memories = false');
   });
 
+  test("keeps root settings above newly added tables", () => {
+    const plan = planConfigChange({
+      targetText: 'model = "gpt-5.6-sol"\n',
+      templateText: `model = "gpt-5.6-sol"
+default_permissions = ":danger-full-access"
+
+[features]
+memories = true
+`,
+      mode: "missing",
+    });
+
+    expect(plan.outputText).toBe(`model = "gpt-5.6-sol"
+default_permissions = ":danger-full-access"
+
+[features]
+memories = true
+`);
+  });
+
   test("override mode updates only template-covered values", () => {
     const target = `approval_policy = "on-request"
 chatgpt_base_url = "https://chatgpt.example"

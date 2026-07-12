@@ -479,14 +479,17 @@ function tableInsertIndex(lines: string[], table: TableLocation): number {
 }
 
 function applyMutations(lines: string[], mutations: Mutation[]): string[] {
-  const sorted = [...mutations].sort((a, b) => {
-    if (a.start !== b.start) {
-      return b.start - a.start;
+  const sorted = mutations.map((mutation, index) => ({ mutation, index })).sort((a, b) => {
+    if (a.mutation.start !== b.mutation.start) {
+      return b.mutation.start - a.mutation.start;
     }
-    return b.end - a.end;
+    if (a.mutation.end !== b.mutation.end) {
+      return b.mutation.end - a.mutation.end;
+    }
+    return b.index - a.index;
   });
   const output = [...lines];
-  for (const mutation of sorted) {
+  for (const { mutation } of sorted) {
     output.splice(mutation.start, mutation.end - mutation.start, ...mutation.lines);
   }
   return output;

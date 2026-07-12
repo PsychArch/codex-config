@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { program } from "commander";
 import {
   applyConfig,
@@ -15,11 +16,16 @@ interface CliOptions extends CommandOptions {
 }
 
 let jsonMode = false;
+const packageVersion = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
 
 program
   .name("codex-config")
   .description("Keep the active Codex config aligned with the supported GPT-5.6 family.")
-  .version("0.3.0")
+  .version(packageVersion)
   .option("--json", "print machine-readable JSON");
 
 program

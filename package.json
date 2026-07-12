@@ -1,6 +1,6 @@
 {
   "name": "codex-config",
-  "version": "0.3.0",
+  "version": "0.144.1",
   "description": "Keep Codex config.toml current for the GPT-5.6 model family without overwriting unrelated settings.",
   "type": "module",
   "license": "MIT",

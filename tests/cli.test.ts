@@ -9,6 +9,16 @@ import { describe, expect, test } from "vitest";
 const execFileAsync = promisify(execFile);
 
 describe("cli", () => {
+  test("--version matches the package manifest", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+      version: string;
+    };
+
+    await expect(runCli(["--version"])).resolves.toMatchObject({
+      stdout: `${packageJson.version}\n`,
+    });
+  });
+
   test("-f enables override mode", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const templatePath = join(directory, "config.toml.template");
@@ -90,6 +100,7 @@ personality = "friendly"
 
 [features]
 image_detail_original = true
+view_image_tool = true
 `,
       "utf8",
     );
@@ -111,6 +122,7 @@ image_detail_original = true
         { action: "update", path: "model" },
         { action: "remove", path: "personality" },
         { action: "remove", path: "features.image_detail_original" },
+        { action: "remove", path: "features.view_image_tool" },
       ]),
     );
 

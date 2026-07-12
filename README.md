@@ -12,6 +12,8 @@ GPT-5.6 models carry their own personality instructions and do not expose a sele
 
 The template explicitly opts into memories. Newly stable Codex capabilities such as multi-agent, goals, image generation, plugins, and tool search behavior are left at their source defaults, so the config does not pin redundant feature flags. Under-development features are not enabled automatically.
 
+Package release versions track the Codex CLI version used for live compatibility testing.
+
 ## Apply
 
 ```bash
@@ -22,7 +24,7 @@ By default, missing template settings are added and existing values are preserve
 
 - unsupported models are changed to `gpt-5.6-sol`;
 - `sandbox_mode` is converted to its equivalent `default_permissions` profile;
-- `personality` and Codex feature flags marked as removed are deleted;
+- `personality`, Codex feature flags marked as removed, and historical flags deleted from the source catalog are deleted;
 - legacy feature aliases are renamed, and old web-search toggles become the top-level `web_search` mode;
 - legacy status-line and terminal-title identifiers are canonicalized.
 
@@ -46,7 +48,7 @@ pnpm dlx codex-config check
 pnpm dlx codex-config doctor
 ```
 
-`doctor` validates TOML against the bundled Codex JSON Schema and reports the exact Codex source revision, supported models, removed or deprecated features, and non-canonical settings. Add `--json` to any command for machine-readable output.
+`doctor` validates TOML against the bundled Codex JSON Schema and reports the exact Codex source revision, supported models, removed, retired, or deprecated features, and non-canonical settings. Add `--json` to any command for machine-readable output.
 
 ## Profiles
 
@@ -85,4 +87,4 @@ pnpm run check
 pnpm run build
 ```
 
-`sync:codex` snapshots `config.schema.json`, the GPT-5.6 model capabilities (including minimum client version, reasoning efforts, service tiers, and personality support), and feature lifecycle metadata from the selected Codex checkout. Commit the generated changes together so validation and migrations target one source revision.
+`sync:codex` snapshots `config.schema.json`, the GPT-5.6 model capabilities (including minimum client version, reasoning efforts, service tiers, and personality support), and feature lifecycle metadata from the selected Codex checkout. It also reads the full first-parent feature history to retain migrations for keys that Codex deleted outright, so the source checkout must not be shallow. Commit the generated changes together so validation and migrations target one source revision.

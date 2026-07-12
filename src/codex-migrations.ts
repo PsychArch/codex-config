@@ -124,7 +124,10 @@ export function planCodexMigrations(targetText: string): ConfigChangePlan {
   ) {
     removalPaths.push(["sandbox_mode"]);
   }
-  for (const key of CODEX_TARGET.removedFeatureKeys) {
+  for (const key of [
+    ...CODEX_TARGET.removedFeatureKeys,
+    ...CODEX_TARGET.retiredFeatureKeys,
+  ]) {
     if (hasPath(parsed, ["features", key])) {
       removalPaths.push(["features", key]);
     }

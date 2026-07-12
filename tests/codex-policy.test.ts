@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
-import { inspectCodexConfig } from "../src/codex-policy.js";
+import { CODEX_TARGET, inspectCodexConfig } from "../src/codex-policy.js";
 
 describe("inspectCodexConfig", () => {
   test("accepts the bundled GPT-5.6 template", async () => {
@@ -9,6 +9,17 @@ describe("inspectCodexConfig", () => {
     await expect(
       inspectCodexConfig(template, "template", { requireModel: true }),
     ).resolves.toEqual({ valid: true, clean: true, issues: [] });
+  });
+
+  test("does not classify schema-recognized feature keys as retired", async () => {
+    const schema = JSON.parse(await readFile("config.schema.json", "utf8")) as {
+      properties: { features: { properties: Record<string, unknown> } };
+    };
+    const schemaFeatureKeys = new Set(Object.keys(schema.properties.features.properties));
+
+    expect(CODEX_TARGET.retiredFeatureKeys.filter((key) => schemaFeatureKeys.has(key))).toEqual(
+      [],
+    );
   });
 
   test("rejects models outside the GPT-5.6 family", async () => {
@@ -119,6 +130,26 @@ web_search = true
         }),
         expect.objectContaining({ code: "legacy_feature_alias", path: "features.web_search" }),
       ]),
+    );
+  });
+
+  test("reports historical feature flags deleted from the Codex catalog", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "gpt-5.6-sol"
+
+[features]
+view_image_tool = true
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection.issues).toContainEqual(
+      expect.objectContaining({
+        code: "retired_feature",
+        path: "features.view_image_tool",
+        severity: "warning",
+      }),
     );
   });
 

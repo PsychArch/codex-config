@@ -195,6 +195,16 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
       });
     }
   }
+  for (const key of CODEX_TARGET.retiredFeatureKeys) {
+    if (hasPath(parsed, ["features", key])) {
+      issues.push({
+        severity: "warning",
+        code: "retired_feature",
+        path: `features.${key}`,
+        message: "This historical feature flag is no longer recognized by the targeted Codex source.",
+      });
+    }
+  }
   for (const key of CODEX_TARGET.deprecatedFeatureKeys) {
     if (hasPath(parsed, ["features", key])) {
       issues.push({

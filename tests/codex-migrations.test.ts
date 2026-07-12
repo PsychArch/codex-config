@@ -1,6 +1,7 @@
 import { parse } from "smol-toml";
 import { describe, expect, test } from "vitest";
 import { planCodexMigrations } from "../src/codex-migrations.js";
+import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 describe("planCodexMigrations", () => {
   test("migrates the v0.2 defaults to the GPT-5.6 configuration", () => {
@@ -14,6 +15,7 @@ memories = true
 image_detail_original = true
 terminal_resize_reflow = true
 tool_search = true
+view_image_tool = true
 
 [tui]
 status_line = ["model-name", "project", "status", "session-id"]
@@ -55,6 +57,7 @@ url = "https://example.test/jina"
       { action: "remove", path: "features.image_detail_original" },
       { action: "remove", path: "features.terminal_resize_reflow" },
       { action: "remove", path: "features.tool_search" },
+      { action: "remove", path: "features.view_image_tool" },
     ]);
     expect(second.changed).toBe(false);
     expect(second.outputText).toBe(plan.outputText);
@@ -72,6 +75,37 @@ default_permissions = ":read-only"
       model: "gpt-5.6-terra",
       default_permissions: ":read-only",
     });
+  });
+
+  test("removes every feature key retired from Codex source history", () => {
+    expect(CODEX_TARGET.retiredFeatureKeys).toEqual(
+      expect.arrayContaining([
+        "parallel",
+        "realtime_conversation_v2",
+        "skills",
+        "spawn_csv",
+        "view_image_tool",
+        "warnings",
+      ]),
+    );
+    const target = `model = "gpt-5.6-sol"
+
+[features]
+${CODEX_TARGET.retiredFeatureKeys.map((key) => `${key} = true`).join("\n")}
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed.features).toEqual({});
+    expect(plan.operations).toEqual(
+      CODEX_TARGET.retiredFeatureKeys.map((key) => ({
+        action: "remove",
+        path: `features.${key}`,
+      })),
+    );
+    expect(second.changed).toBe(false);
   });
 
   test("maps each legacy sandbox mode without broadening permissions", () => {

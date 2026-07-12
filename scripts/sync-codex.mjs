@@ -18,6 +18,9 @@ const sourceInputPaths = [
   "codex-rs/features/src/lib.rs",
   "codex-rs/features/src/legacy.rs",
 ];
+if (gitOutput(sourceRoot, ["rev-parse", "--is-shallow-repository"]) === "true") {
+  throw new Error("A full Codex git checkout is required to recover retired feature keys.");
+}
 const modifiedSourceInputs = gitOutput(sourceRoot, [
   "diff",
   "--name-only",
@@ -65,6 +68,21 @@ const minimumClientVersion = maxVersion(models.map((model) => model.minimumClien
 
 const featureCatalog = parseFeatureCatalog(featuresRust);
 const legacyFeatureAliases = parseLegacyFeatureAliases(legacyFeaturesRust, featureCatalog);
+const currentFeatureKeys = new Set(parseFeatureKeys(featuresRust));
+const currentLegacyFeatureKeys = new Set(Object.keys(legacyFeatureAliases));
+const retiredFeatureKeys = parseHistoricalFeatureKeys(
+  gitOutput(sourceRoot, [
+    "log",
+    "--first-parent",
+    "--follow",
+    "-p",
+    "--format=",
+    "--",
+    "codex-rs/features/src/lib.rs",
+  ]),
+).filter(
+  (key) => !currentFeatureKeys.has(key) && !currentLegacyFeatureKeys.has(key),
+);
 const target = {
   sourceRevision: gitOutput(sourceRoot, ["rev-parse", "HEAD"]),
   sourceCommitDate: gitOutput(sourceRoot, ["show", "-s", "--format=%cI", "HEAD"]),
@@ -75,6 +93,7 @@ const target = {
     .filter((feature) => feature.stage === "removed")
     .map((feature) => feature.key)
     .sort(),
+  retiredFeatureKeys,
   deprecatedFeatureKeys: featureCatalog
     .filter((feature) => feature.stage === "deprecated")
     .map((feature) => feature.key)
@@ -147,6 +166,10 @@ function parseFeatureCatalog(source) {
     });
 }
 
+function parseFeatureKeys(source) {
+  return [...new Set([...source.matchAll(/^\s*key:\s*"([^"]+)"/gm)].map((match) => match[1]))];
+}
+
 function parseLegacyFeatureAliases(source, featureCatalog) {
   const canonicalKeyById = new Map(featureCatalog.map((feature) => [feature.id, feature.key]));
   const entries = source
@@ -173,8 +196,20 @@ function parseLegacyFeatureAliases(source, featureCatalog) {
   );
 }
 
+function parseHistoricalFeatureKeys(source) {
+  return [
+    ...new Set(
+      [...source.matchAll(/^[+-]\s*key:\s*"([^"]+)"/gm)].map((match) => match[1]),
+    ),
+  ].sort();
+}
+
 function gitOutput(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  return execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  }).trim();
 }
 
 function maxVersion(versions) {

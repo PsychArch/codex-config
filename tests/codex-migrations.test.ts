@@ -203,4 +203,74 @@ multi_agent = false
       features: { multi_agent: false },
     });
   });
+
+  test("migrates retired root settings, misplaced web search, and the ui table", () => {
+    const target = `model = "gpt-5.6-sol"
+disable_response_storage = true
+preferred_auth_method = "apikey"
+web_search_request = true
+
+[ui]
+notifications = true
+theme = "legacy-theme"
+
+[tui]
+notifications = false
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed).toEqual({
+      model: "gpt-5.6-sol",
+      web_search: "live",
+      tui: {
+        notifications: false,
+        theme: "legacy-theme",
+      },
+    });
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        { action: "add", path: "web_search" },
+        { action: "add", path: "tui.theme" },
+        { action: "remove", path: "disable_response_storage" },
+        { action: "remove", path: "preferred_auth_method" },
+        { action: "remove", path: "web_search_request" },
+        { action: "remove", path: "ui" },
+      ]),
+    );
+    expect(second.changed).toBe(false);
+  });
+
+  test("migrates the historical tools web_search_request alias", () => {
+    const plan = planCodexMigrations(`model = "gpt-5.6-sol"
+
+[tools]
+web_search_request = true
+`);
+
+    expect(parse(plan.outputText)).toEqual({
+      model: "gpt-5.6-sol",
+      web_search: "live",
+      tools: {},
+    });
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        { action: "add", path: "web_search" },
+        { action: "remove", path: "tools.web_search_request" },
+      ]),
+    );
+  });
+
+  test("does not silently discard a non-table ui value", () => {
+    const target = `model = "gpt-5.6-sol"
+ui = "custom-client-state"
+`;
+
+    const plan = planCodexMigrations(target);
+
+    expect(plan.changed).toBe(false);
+    expect(plan.outputText).toBe(target);
+  });
 });

@@ -2,6 +2,7 @@ import { chmod, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
+import { parse } from "smol-toml";
 import { describe, expect, test } from "vitest";
 import { atomicWriteFile } from "../src/fs.js";
 import { planConfigChange, planConfigRemovals } from "../src/toml-merge.js";
@@ -92,6 +93,30 @@ memories = true
 `);
   });
 
+  test("keeps additions scoped to an existing final table when adding later tables", () => {
+    const target = `model = "gpt-5.6-sol"
+
+[tui]
+notifications = true
+`;
+
+    const plan = planConfigChange({ targetText: target, templateText: template, mode: "missing" });
+
+    expect(parse(plan.outputText)).toEqual({
+      model: "gpt-5.6-sol",
+      approval_policy: "never",
+      default_permissions: ":danger-full-access",
+      model_reasoning_summary: "concise",
+      analytics: { enabled: false },
+      features: { memories: true },
+      tui: {
+        notifications: true,
+        alternate_screen: "never",
+        status_line: ["model-with-reasoning", "project-name"],
+      },
+    });
+  });
+
   test("override mode updates only template-covered values", () => {
     const target = `approval_policy = "on-request"
 chatgpt_base_url = "https://chatgpt.example"
@@ -155,6 +180,28 @@ url = "https://example.test/jina"
     expect(plan.outputText).toContain('url = "https://example.test/jina"');
     expect(second.changed).toBe(false);
     expect(second.outputText).toBe(plan.outputText);
+  });
+
+  test("removes a table and all of its nested table blocks", () => {
+    const target = `model = "gpt-5.6-sol"
+
+[ui]
+notifications = true
+
+[ui.keymap.global]
+copy = "ctrl-y"
+
+[tui]
+animations = false
+`;
+
+    const plan = planConfigRemovals(target, [["ui"]]);
+
+    expect(parse(plan.outputText)).toEqual({
+      model: "gpt-5.6-sol",
+      tui: { animations: false },
+    });
+    expect(plan.operations).toEqual([{ action: "remove", path: "ui" }]);
   });
 
   test("rejects a removal that cannot be represented as a surgical line edit", () => {

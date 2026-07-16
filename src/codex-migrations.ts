@@ -76,6 +76,8 @@ export function planCodexMigrations(targetText: string): ConfigChangePlan {
   }
 
   const legacyWebSearchPaths = [
+    ["web_search_request"],
+    ["tools", "web_search_request"],
     ["features", "web_search"],
     ["features", "web_search_cached"],
     ["features", "web_search_request"],
@@ -91,6 +93,10 @@ export function planCodexMigrations(targetText: string): ConfigChangePlan {
   }
 
   const tuiUpdates: Record<string, unknown> = {};
+  const legacyUi = getPath(parsed, ["ui"]);
+  if (isRecord(legacyUi)) {
+    Object.assign(tuiUpdates, missingValues(getPath(parsed, ["tui"]), legacyUi));
+  }
   const statusLine = getPath(parsed, ["tui", "status_line"]);
   const migratedStatusLine = migrateAliases(statusLine, STATUS_LINE_ALIASES);
   if (migratedStatusLine) {
@@ -112,6 +118,20 @@ export function planCodexMigrations(targetText: string): ConfigChangePlan {
   });
 
   const removalPaths: string[][] = [];
+  for (const key of ["disable_response_storage", "preferred_auth_method"]) {
+    if (hasPath(parsed, [key])) {
+      removalPaths.push([key]);
+    }
+  }
+  if (isRecord(legacyUi)) {
+    removalPaths.push(["ui"]);
+  }
+  if (hasPath(parsed, ["web_search_request"])) {
+    removalPaths.push(["web_search_request"]);
+  }
+  if (hasPath(parsed, ["tools", "web_search_request"])) {
+    removalPaths.push(["tools", "web_search_request"]);
+  }
   if (hasPath(parsed, ["personality"])) {
     removalPaths.push(["personality"]);
   }
@@ -175,6 +195,8 @@ function legacyWebSearchMode(parsed: unknown): "cached" | "live" | "disabled" {
     return "cached";
   }
   if (
+    getPath(parsed, ["web_search_request"]) === true ||
+    getPath(parsed, ["tools", "web_search_request"]) === true ||
     getPath(parsed, ["features", "web_search_request"]) === true ||
     getPath(parsed, ["features", "web_search"]) === true
   ) {
@@ -216,4 +238,26 @@ function hasPath(value: unknown, path: string[]): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function missingValues(
+  canonical: unknown,
+  legacy: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const canonicalRecord = isRecord(canonical) ? canonical : undefined;
+  for (const [key, legacyValue] of Object.entries(legacy)) {
+    if (!canonicalRecord || !Object.prototype.hasOwnProperty.call(canonicalRecord, key)) {
+      result[key] = legacyValue;
+      continue;
+    }
+    const canonicalValue = canonicalRecord[key];
+    if (isRecord(canonicalValue) && isRecord(legacyValue)) {
+      const nested = missingValues(canonicalValue, legacyValue);
+      if (Object.keys(nested).length > 0) {
+        result[key] = nested;
+      }
+    }
+  }
+  return result;
 }

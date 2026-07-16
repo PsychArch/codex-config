@@ -104,7 +104,14 @@ export function planConfigChange(options: PlanConfigChangeOptions): ConfigChange
     }
   }
 
-  for (const [tableKey, entries] of missingByTable) {
+  const tableGroups = [...missingByTable.entries()];
+  tableGroups.sort(([leftKey], [rightKey]) => {
+    const leftExists = targetScan.tables.has(leftKey);
+    const rightExists = targetScan.tables.has(rightKey);
+    return leftExists === rightExists ? 0 : leftExists ? -1 : 1;
+  });
+
+  for (const [tableKey, entries] of tableGroups) {
     entries.sort((a, b) => a.order - b.order);
     const tablePath = entries[0]?.tablePath ?? [];
     const table = targetScan.tables.get(tableKey);
@@ -161,12 +168,39 @@ export function planConfigRemovals(
       continue;
     }
     const targetEntry = targetScan.entryByPath.get(pathKey(path));
-    if (!targetEntry) {
+    if (targetEntry) {
+      mutations.push({ start: targetEntry.start, end: targetEntry.end, lines: [] });
+      operations.push({ action: "remove", path: formatPath(path) });
+      continue;
+    }
+
+    const tableRanges = [...targetScan.tables.values()]
+      .filter(
+        (table) =>
+          table.header !== undefined && pathIsPrefix(path, table.path),
+      )
+      .map((table) => ({ start: table.header as number, end: table.end, lines: [] }));
+    if (tableRanges.length > 0) {
+      mutations.push(...tableRanges);
+      operations.push({ action: "remove", path: formatPath(path) });
+      continue;
+    }
+
+    const descendantEntries = targetScan.entries.filter((entry) =>
+      pathIsPrefix(path, entry.fullPath),
+    );
+    if (descendantEntries.length === 0) {
       throw new Error(
         `Cannot remove ${formatPath(path)} because it is not represented as a standalone TOML key.`,
       );
     }
-    mutations.push({ start: targetEntry.start, end: targetEntry.end, lines: [] });
+    mutations.push(
+      ...descendantEntries.map((entry) => ({
+        start: entry.start,
+        end: entry.end,
+        lines: [],
+      })),
+    );
     operations.push({ action: "remove", path: formatPath(path) });
   }
 
@@ -544,6 +578,13 @@ function ensureTrailingNewline(text: string): string {
 
 function pathKey(path: string[]): string {
   return JSON.stringify(path);
+}
+
+function pathIsPrefix(prefix: string[], path: string[]): boolean {
+  return (
+    prefix.length <= path.length &&
+    prefix.every((segment, index) => path[index] === segment)
+  );
 }
 
 function formatPath(path: string[]): string {

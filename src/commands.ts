@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { planCodexMigrations } from "./codex-migrations.js";
+import { adaptCodexTemplate, planCodexMigrations } from "./codex-migrations.js";
 import {
   CODEX_TARGET,
   formatConfigIssues,
@@ -106,9 +106,12 @@ export async function doctor(options: CommandOptions): Promise<DoctorResult> {
   const templateExists = await fileExists(paths.template);
   let templateInspection = emptyInspection();
   if (templateExists) {
-    templateInspection = await inspectCodexConfig(await readFile(paths.template, "utf8"), "template", {
-      requireModel: true,
-    });
+    const templateText = await readFile(paths.template, "utf8");
+    templateInspection = await inspectCodexConfig(
+      planCodexMigrations(templateText).outputText,
+      "template",
+      { requireModel: true },
+    );
   }
 
   const targetExists = await fileExists(paths.target);
@@ -162,21 +165,34 @@ async function buildConfigPlan(
   mode: MergeMode,
   targetPath: string,
 ): Promise<ConfigChangePlan> {
-  const templateInspection = await inspectCodexConfig(templateText, "template", {
+  const normalizedTemplateText = planCodexMigrations(templateText).outputText;
+  const templateInspection = await inspectCodexConfig(normalizedTemplateText, "template", {
     requireModel: true,
   });
   if (!templateInspection.clean) {
     throw new Error(`Template is not compatible with the GPT-5.6 target:\n${formatConfigIssues("template", templateInspection)}`);
   }
 
-  const migrationPlan = targetText === undefined ? undefined : planCodexMigrations(targetText);
+  const migrationPlan =
+    targetText === undefined
+      ? undefined
+      : planCodexMigrations(targetText, { targetPath });
+  const effectiveTemplateText = migrationPlan && mode === "missing"
+    ? adaptCodexTemplate(migrationPlan.outputText, normalizedTemplateText)
+    : normalizedTemplateText;
   const mergePlan = planConfigChange({
     targetText: migrationPlan?.outputText,
-    templateText,
+    templateText: effectiveTemplateText,
     mode,
     targetPath,
   });
-  const plan = migrationPlan ? combinePlans(migrationPlan, mergePlan) : mergePlan;
+  const mergedPlan = migrationPlan ? combinePlans(migrationPlan, mergePlan) : mergePlan;
+  const finalMigrationPlan = migrationPlan
+    ? planCodexMigrations(mergedPlan.outputText, { targetPath })
+    : undefined;
+  const plan = finalMigrationPlan
+    ? combinePlans(mergedPlan, finalMigrationPlan)
+    : mergedPlan;
   const finalInspection = await inspectCodexConfig(plan.outputText, "result", {
     requireModel: true,
   });
@@ -287,6 +303,7 @@ function formatOperationGroups(operations: ChangeOperation[]): string[] {
     { action: "add", heading: "Added settings:" },
     { action: "update", heading: "Updated settings:" },
     { action: "remove", heading: "Removed obsolete settings:" },
+    { action: "reformat", heading: "Reformatted after semantic TOML migration:" },
   ];
   const lines: string[] = [];
   for (const group of groups) {

@@ -1,4 +1,4 @@
-import { parse } from "smol-toml";
+import { parse, stringify, TomlDate } from "smol-toml";
 
 export type MergeMode = "missing" | "override";
 
@@ -10,7 +10,7 @@ export interface PlanConfigChangeOptions {
 }
 
 export interface ChangeOperation {
-  action: "create" | "add" | "update" | "remove";
+  action: "create" | "add" | "update" | "remove" | "reformat";
   path: string;
 }
 
@@ -54,8 +54,65 @@ interface Mutation {
 export function planConfigChange(options: PlanConfigChangeOptions): ConfigChangePlan {
   const templateText = normalizeNewlines(options.templateText);
   const templateParsed = parseToml(templateText, "template");
-  const templateScan = scanToml(templateText, true);
 
+  if (options.targetText === undefined) {
+    return {
+      changed: true,
+      outputText: ensureTrailingNewline(templateText),
+      operations: [{ action: "create", path: options.targetPath ?? "~/.codex/config.toml" }],
+    };
+  }
+
+  const targetText = normalizeNewlines(options.targetText);
+  const targetParsed = parseToml(targetText, "target");
+  const semanticPlan = planSemanticChange(targetParsed, templateParsed, options.mode);
+  if (semanticPlan.operations.length === 0) {
+    return {
+      changed: false,
+      outputText: ensureTrailingNewline(targetText),
+      operations: [],
+    };
+  }
+
+  try {
+    const surgicalPlan = planConfigChangeSurgically({
+      ...options,
+      targetText,
+      templateText,
+    });
+    if (semanticEqual(parseToml(surgicalPlan.outputText, "result"), semanticPlan.output)) {
+      return {
+        changed: true,
+        outputText: surgicalPlan.outputText,
+        operations: semanticPlan.operations,
+      };
+    }
+  } catch {
+    // Some valid TOML representations (notably inline tables, dotted keys,
+    // arrays of tables, and multiline strings) cannot be edited safely by the
+    // line-oriented fast path. Fall back to a canonical semantic rewrite.
+  }
+
+  const outputText = ensureTrailingNewline(
+    stringify(semanticPlan.output, { numbersAsFloat: true }),
+  );
+  if (!semanticEqual(parseToml(outputText, "result"), semanticPlan.output)) {
+    throw new Error("Could not serialize the intended TOML merge without changing its meaning.");
+  }
+  return {
+    changed: true,
+    outputText,
+    operations: [
+      ...semanticPlan.operations,
+      { action: "reformat", path: options.targetPath ?? "config.toml" },
+    ],
+  };
+}
+
+function planConfigChangeSurgically(options: PlanConfigChangeOptions): ConfigChangePlan {
+  const templateText = normalizeNewlines(options.templateText);
+  const templateParsed = parseToml(templateText, "template");
+  const templateScan = scanToml(templateText, true);
   if (options.targetText === undefined) {
     return {
       changed: true,
@@ -104,7 +161,14 @@ export function planConfigChange(options: PlanConfigChangeOptions): ConfigChange
     }
   }
 
-  for (const [tableKey, entries] of missingByTable) {
+  const tableGroups = [...missingByTable.entries()];
+  tableGroups.sort(([leftKey], [rightKey]) => {
+    const leftExists = targetScan.tables.has(leftKey);
+    const rightExists = targetScan.tables.has(rightKey);
+    return leftExists === rightExists ? 0 : leftExists ? -1 : 1;
+  });
+
+  for (const [tableKey, entries] of tableGroups) {
     entries.sort((a, b) => a.order - b.order);
     const tablePath = entries[0]?.tablePath ?? [];
     const table = targetScan.tables.get(tableKey);
@@ -148,6 +212,60 @@ export function validateToml(text: string, label: string): void {
 export function planConfigRemovals(
   targetText: string,
   paths: ReadonlyArray<ReadonlyArray<string>>,
+  targetPath = "config.toml",
+): ConfigChangePlan {
+  const normalizedTarget = normalizeNewlines(targetText);
+  const targetParsed = parseToml(normalizedTarget, "target");
+  const output = cloneTomlValue(targetParsed);
+  const operations: ChangeOperation[] = [];
+  for (const readonlyPath of paths) {
+    const path = [...readonlyPath];
+    if (path.length === 0) {
+      throw new Error("A TOML removal path cannot be empty.");
+    }
+    if (!hasPath(output, path)) {
+      continue;
+    }
+    deletePath(output, path);
+    operations.push({ action: "remove", path: formatPath(path) });
+  }
+
+  if (operations.length === 0) {
+    return {
+      changed: false,
+      outputText: ensureTrailingNewline(normalizedTarget),
+      operations,
+    };
+  }
+
+  try {
+    const surgicalPlan = planConfigRemovalsSurgically(normalizedTarget, paths);
+    if (semanticEqual(parseToml(surgicalPlan.outputText, "result"), output)) {
+      return {
+        changed: true,
+        outputText: surgicalPlan.outputText,
+        operations,
+      };
+    }
+  } catch {
+    // See planConfigChange: canonical rewriting is safer than emitting TOML
+    // whose surface edit no longer matches the intended semantic document.
+  }
+
+  const outputText = ensureTrailingNewline(stringify(output, { numbersAsFloat: true }));
+  if (!semanticEqual(parseToml(outputText, "result"), output)) {
+    throw new Error("Could not serialize the intended TOML removal without changing its meaning.");
+  }
+  return {
+    changed: true,
+    outputText,
+    operations: [...operations, { action: "reformat", path: targetPath }],
+  };
+}
+
+function planConfigRemovalsSurgically(
+  targetText: string,
+  paths: ReadonlyArray<ReadonlyArray<string>>,
 ): ConfigChangePlan {
   const normalizedTarget = normalizeNewlines(targetText);
   const targetParsed = parseToml(normalizedTarget, "target");
@@ -161,12 +279,39 @@ export function planConfigRemovals(
       continue;
     }
     const targetEntry = targetScan.entryByPath.get(pathKey(path));
-    if (!targetEntry) {
+    if (targetEntry) {
+      mutations.push({ start: targetEntry.start, end: targetEntry.end, lines: [] });
+      operations.push({ action: "remove", path: formatPath(path) });
+      continue;
+    }
+
+    const tableRanges = [...targetScan.tables.values()]
+      .filter(
+        (table) =>
+          table.header !== undefined && pathIsPrefix(path, table.path),
+      )
+      .map((table) => ({ start: table.header as number, end: table.end, lines: [] }));
+    if (tableRanges.length > 0) {
+      mutations.push(...tableRanges);
+      operations.push({ action: "remove", path: formatPath(path) });
+      continue;
+    }
+
+    const descendantEntries = targetScan.entries.filter((entry) =>
+      pathIsPrefix(path, entry.fullPath),
+    );
+    if (descendantEntries.length === 0) {
       throw new Error(
         `Cannot remove ${formatPath(path)} because it is not represented as a standalone TOML key.`,
       );
     }
-    mutations.push({ start: targetEntry.start, end: targetEntry.end, lines: [] });
+    mutations.push(
+      ...descendantEntries.map((entry) => ({
+        start: entry.start,
+        end: entry.end,
+        lines: [],
+      })),
+    );
     operations.push({ action: "remove", path: formatPath(path) });
   }
 
@@ -187,7 +332,7 @@ export function planConfigRemovals(
 
 function parseToml(text: string, label: string): unknown {
   try {
-    return parse(text);
+    return parse(text, { integersAsBigInt: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid ${label} TOML: ${message}`);
@@ -518,11 +663,215 @@ function hasPath(value: unknown, path: string[]): boolean {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !(value instanceof Date)
+  );
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return semanticEqual(left, right);
+}
+
+function semanticEqual(left: unknown, right: unknown): boolean {
+  if (left instanceof TomlDate || right instanceof TomlDate) {
+    return (
+      left instanceof TomlDate &&
+      right instanceof TomlDate &&
+      left.toISOString() === right.toISOString()
+    );
+  }
+  if (left instanceof Date || right instanceof Date) {
+    return (
+      left instanceof Date &&
+      right instanceof Date &&
+      left.constructor === right.constructor &&
+      left.getTime() === right.getTime()
+    );
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => semanticEqual(value, right[index]))
+    );
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) {
+      return false;
+    }
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(right, key) &&
+          semanticEqual(left[key], right[key]),
+      )
+    );
+  }
+  if (typeof left === "number" && typeof right === "number" && left === 0 && right === 0) {
+    return true;
+  }
+  return Object.is(left, right);
+}
+
+function planSemanticChange(
+  target: unknown,
+  template: unknown,
+  mode: MergeMode,
+): { output: unknown; operations: ChangeOperation[] } {
+  const output = cloneTomlValue(target);
+  const operations: ChangeOperation[] = [];
+  const replacedAncestors = new Set<string>();
+  for (const entry of leafEntries(template)) {
+    const targetHasValue = hasPath(target, entry.path);
+    if (!targetHasValue) {
+      const conflictingAncestor = nonTableAncestor(target, entry.path);
+      if (conflictingAncestor && mode === "missing") {
+        throw new Error(
+          `Cannot add ${formatPath(entry.path)} because ${formatPath(conflictingAncestor)} is not a table.`,
+        );
+      }
+      setPath(
+        output,
+        entry.path,
+        cloneTomlValue(entry.value),
+        conflictingAncestor !== undefined,
+      );
+      if (conflictingAncestor) {
+        const key = pathKey(conflictingAncestor);
+        if (!replacedAncestors.has(key)) {
+          operations.push({ action: "update", path: formatPath(conflictingAncestor) });
+          replacedAncestors.add(key);
+        }
+      } else {
+        operations.push({ action: "add", path: formatPath(entry.path) });
+      }
+      continue;
+    }
+    if (isRecord(entry.value) && Object.keys(entry.value).length === 0) {
+      if (mode === "override" && !isRecord(getPath(target, entry.path))) {
+        setPath(output, entry.path, {}, true);
+        operations.push({ action: "update", path: formatPath(entry.path) });
+      }
+      continue;
+    }
+    if (mode === "override" && !semanticEqual(getPath(target, entry.path), entry.value)) {
+      setPath(output, entry.path, cloneTomlValue(entry.value), true);
+      operations.push({ action: "update", path: formatPath(entry.path) });
+    }
+  }
+  return { output, operations };
+}
+
+function nonTableAncestor(root: unknown, path: string[]): string[] | undefined {
+  let current = root;
+  for (const [index, segment] of path.slice(0, -1).entries()) {
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
+      return undefined;
+    }
+    current = current[segment];
+    if (!isRecord(current)) {
+      return path.slice(0, index + 1);
+    }
+  }
+  return undefined;
+}
+
+function leafEntries(
+  value: unknown,
+  path: string[] = [],
+): Array<{ path: string[]; value: unknown }> {
+  if (!isRecord(value)) {
+    return [{ path, value }];
+  }
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    return path.length === 0 ? [] : [{ path, value }];
+  }
+  return entries.flatMap(([key, child]) =>
+    leafEntries(child, [...path, key]),
+  );
+}
+
+function setPath(root: unknown, path: string[], value: unknown, replace: boolean): void {
+  if (!isRecord(root) || path.length === 0) {
+    throw new Error(`Cannot set ${formatPath(path)} in a non-table TOML document.`);
+  }
+  let current = root;
+  for (const [index, segment] of path.slice(0, -1).entries()) {
+    const existing = Object.prototype.hasOwnProperty.call(current, segment)
+      ? current[segment]
+      : undefined;
+    if (existing === undefined) {
+      setOwnProperty(current, segment, {});
+    } else if (!isRecord(existing)) {
+      if (!replace) {
+        throw new Error(
+          `Cannot add ${formatPath(path)} because ${formatPath(path.slice(0, index + 1))} is not a table.`,
+        );
+      }
+      setOwnProperty(current, segment, {});
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+  setOwnProperty(current, path.at(-1) as string, value);
+}
+
+function deletePath(root: unknown, path: string[]): void {
+  if (!isRecord(root) || path.length === 0) {
+    return;
+  }
+  let current = root;
+  for (const segment of path.slice(0, -1)) {
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+      return;
+    }
+    const child = current[segment];
+    if (!isRecord(child)) {
+      return;
+    }
+    current = child;
+  }
+  delete current[path.at(-1) as string];
+}
+
+function setOwnProperty(
+  record: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function cloneTomlValue(value: unknown): unknown {
+  if (value instanceof TomlDate) {
+    return new TomlDate(value.toISOString());
+  }
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+  if (Array.isArray(value)) {
+    return value.map(cloneTomlValue);
+  }
+  if (isRecord(value)) {
+    const clone: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+      setOwnProperty(clone, key, cloneTomlValue(child));
+    }
+    return clone;
+  }
+  return value;
 }
 
 function splitLines(text: string): string[] {
@@ -544,6 +893,13 @@ function ensureTrailingNewline(text: string): string {
 
 function pathKey(path: string[]): string {
   return JSON.stringify(path);
+}
+
+function pathIsPrefix(prefix: string[], path: string[]): boolean {
+  return (
+    prefix.length <= path.length &&
+    prefix.every((segment, index) => path[index] === segment)
+  );
 }
 
 function formatPath(path: string[]): string {

@@ -155,5 +155,34 @@ export const CODEX_TARGET = {
     "request_permissions": "exec_permission_approvals",
     "telepathy": "chronicle",
     "web_search": "web_search_request"
-  }
+  },
+  "configKeyAliases": [
+    {
+      "tablePath": [
+        "memories"
+      ],
+      "legacyKey": "no_memories_if_mcp_or_web_search",
+      "canonicalKey": "disable_on_external_context"
+    }
+  ],
+  "tuiKeys": [
+    "alternate_screen",
+    "animations",
+    "keymap",
+    "model_availability_nux",
+    "notification_condition",
+    "notification_method",
+    "notifications",
+    "pet",
+    "pet_anchor",
+    "raw_output_mode",
+    "session_picker_view",
+    "show_tooltips",
+    "status_line",
+    "status_line_use_colors",
+    "terminal_resize_reflow_max_rows",
+    "terminal_title",
+    "theme",
+    "vim_mode_default"
+  ]
 } as const;

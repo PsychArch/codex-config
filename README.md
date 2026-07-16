@@ -9,7 +9,7 @@ It:
 - adds recommended settings that are missing;
 - migrates obsolete settings to their current equivalents;
 - preserves your existing choices and unrelated configuration, including MCP servers, projects, providers, and notices;
-- validates the result against the bundled Codex schema before writing it.
+- validates the result against the bundled schema plus key runtime constraints from the matching Codex release before writing it.
 
 ## Quick start
 
@@ -33,7 +33,9 @@ pnpm --silent dlx codex-config@latest apply --dry-run
 
 The bundled recommendations currently select `gpt-5.6-sol`, high reasoning effort, live web search, the fast service tier, memories, disabled analytics, and a useful terminal status display. They also configure Codex for unrestricted local access without approval prompts. Review the exact values in [`config.toml.template`](config.toml.template) before applying them if that permission level is not appropriate for your environment.
 
-By default, existing values are kept. Compatibility migrations are still applied when an old setting is no longer valid—for example, legacy sandbox permissions, feature aliases, retired feature flags, web-search flags, and terminal display identifiers. Unsupported model selections move to the current default, while supported GPT-5.6 selections are preserved.
+By default, existing values are kept. Compatibility migrations are still applied when an old setting is no longer valid—for example, legacy sandbox permissions, feature and config-key aliases, retired feature flags, web-search flags, and terminal display identifiers. Unsupported OpenAI model selections move to the current default; custom provider models and customized workspace sandboxes are preserved.
+
+Codex-supported configuration values are handled independently of their TOML representation, including dotted keys, inline tables, arrays of tables, multiline strings, and 64-bit integers. The tool keeps comments and formatting when a change can be made safely in place. For syntax that cannot be patched without ambiguity, it performs a canonical TOML rewrite and reports a `reformat` operation.
 
 Use `--force` only when you want every setting managed by `codex-config` reset to its recommended value:
 
@@ -67,6 +69,8 @@ codex --profile work
 
 Use `--target /path/to/config.toml` to manage another file. Use `--template /path/to/template.toml` to supply your own recommendations.
 
+Legacy `profile = "..."` selectors and `[profiles.<name>]` tables are reported but are not split automatically: that migration creates multiple sibling files and may conflict with existing profile files. Move each legacy table to `$CODEX_HOME/<name>.config.toml`, then manage it with `--profile <name>`.
+
 ## Install globally
 
 ```bash
@@ -89,4 +93,4 @@ Maintainers can refresh the bundled schema and Codex compatibility metadata from
 pnpm sync:codex -- --source /path/to/codex
 ```
 
-The source checkout must include full first-parent history so retired configuration keys can be detected.
+The source checkout must include complete, non-partial first-parent history so retired configuration keys can be detected.

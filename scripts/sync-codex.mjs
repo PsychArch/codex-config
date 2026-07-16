@@ -216,11 +216,16 @@ function parseHistoricalFeatureKeys(source) {
 }
 
 function parseConfigKeyAliases(source) {
-  const blocks = source
-    .split("ConfigKeyAlias {")
+  const initializer = source.match(
+    /^\s*(?:pub(?:\([^)]*\))?\s+)?const\s+CONFIG_KEY_ALIASES\s*:\s*&\s*\[\s*ConfigKeyAlias\s*\]\s*=\s*&\s*\[(?<body>[\s\S]*?)\]\s*;/m,
+  )?.groups?.body;
+  if (initializer === undefined) {
+    throw new Error(`Could not find CONFIG_KEY_ALIASES in ${keyAliasesSource}`);
+  }
+  const blocks = initializer
+    .split(/\bConfigKeyAlias\s*\{/)
     .slice(1)
-    .map((chunk) => chunk.split("}", 1)[0])
-    .filter((block) => /\blegacy_key:/.test(block));
+    .map((chunk) => chunk.split("}", 1)[0]);
   const entries = blocks
     .flatMap((block) => {
       const tablePathSource = block.match(/\btable_path:\s*&\[([^\]]*)\]/)?.[1];

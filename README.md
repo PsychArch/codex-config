@@ -1,59 +1,94 @@
 # codex-config
 
-Keep your Codex configuration up to date as Codex evolves.
+## Codex shipped again. Your `config.toml` didn't get the memo.
 
-`codex-config` updates the active `config.toml` to the supported Codex configuration shape and applies a curated set of recommended settings. It is safe to run after every Codex upgrade: repeated runs produce the same result.
+Settings get renamed, feature flags disappear, and yesterday's perfectly good configuration quietly becomes today's archaeological site.
 
-It:
+`codex-config` migrates your configuration to the Codex release it targets and fills in a curated daily-driver setup—without bulldozing your MCP servers, providers, projects, notices, or other custom settings.
 
-- adds recommended settings that are missing;
-- migrates obsolete settings to their current equivalents;
-- preserves your existing choices and unrelated configuration, including MCP servers, projects, providers, and notices;
-- validates the result against the bundled schema plus key runtime constraints from the matching Codex release before writing it.
+Use it when:
 
-## Quick start
+- **Codex shipped again.** Bring old settings forward, remove retired options, and validate the result against the matching Codex schema and runtime rules.
+- **You want a strong setup without spending Sunday reading config docs.** Add a curated profile with high reasoning, live search, fast service, memories, useful terminal status, and analytics disabled.
+- **You already customized everything just so.** Existing choices stay in place by default. Your MCP servers survive the procedure.
 
-Requires Node.js 22 or later.
+## Try it safely
 
-Package versions follow the Codex CLI version used for compatibility testing.
-
-```bash
-pnpm --silent dlx codex-config@latest apply
-```
-
-This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run the same command again whenever you upgrade Codex.
-
-To review the changes first:
+Use Node.js 22.12 or later with npm or pnpm, or run it with Bun. Choose whichever package runner already lives in your terminal:
 
 ```bash
-pnpm --silent dlx codex-config@latest apply --dry-run
+# npm
+npx --yes codex-config@latest apply --dry-run
+
+# pnpm 11 (`pn` is the short form of `pnpm`)
+pn --silent dlx codex-config@latest apply --dry-run
+
+# Bun
+bunx codex-config@latest apply --dry-run
 ```
 
-## Recommended configuration
-
-The bundled recommendations currently select `gpt-5.6-sol`, high reasoning effort, live web search, the fast service tier, memories, disabled analytics, and a useful terminal status display. They also configure Codex for unrestricted local access without approval prompts. Review the exact values in [`config.toml.template`](config.toml.template) before applying them if that permission level is not appropriate for your environment.
-
-By default, existing values are kept. Compatibility migrations are still applied when an old setting is no longer valid—for example, legacy sandbox permissions, feature and config-key aliases, retired feature flags, web-search flags, and terminal display identifiers. Unsupported OpenAI model selections move to the current default; custom provider models and customized workspace sandboxes are preserved.
-
-Codex-supported configuration values are handled independently of their TOML representation, including dotted keys, inline tables, arrays of tables, multiline strings, and 64-bit integers. The tool keeps comments and formatting when a change can be made safely in place. For syntax that cannot be patched without ambiguity, it performs a canonical TOML rewrite and reports a `reformat` operation.
-
-Use `--force` only when you want every setting managed by `codex-config` reset to its recommended value:
+The dry run shows which settings would be added, updated, or removed without changing a file. Happy with the plan? Run the same command without `--dry-run`:
 
 ```bash
-pnpm --silent dlx codex-config@latest apply --force
+npx --yes codex-config@latest apply
+pn --silent dlx codex-config@latest apply
+bunx codex-config@latest apply
 ```
 
-## Check your configuration
+This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
+
+Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
+
+## The curated profile
+
+The bundled profile is an opinionated setup for trusted local development:
+
+| Setting | What you get |
+| --- | --- |
+| `gpt-5.6-sol` | The default model for the targeted Codex release |
+| High reasoning effort | More reasoning for coding and planning tasks |
+| Live web search | Current information when a task needs it |
+| Fast service tier | Priority processing when available |
+| Memories enabled | Continuity across Codex sessions |
+| Analytics disabled | Less telemetry |
+| Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
+
+> [!WARNING]
+> The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.
+
+By default, recommendations are added only where you have not already made a choice. Use `--force` when you deliberately want every setting managed by `codex-config` reset to the bundled profile:
+
+```bash
+pn --silent dlx codex-config@latest apply --force
+```
+
+You can also supply your own recommendations with `--template /path/to/template.toml`.
+
+## Your config stays yours
+
+Compatibility migrations are intentionally more selective than replacing the whole file. `codex-config`:
+
+- migrates legacy sandbox permissions, approval policies, feature aliases, config-key aliases, web-search flags, memory settings, and terminal display identifiers;
+- removes settings and feature flags that the targeted Codex release no longer uses;
+- moves unsupported OpenAI model selections to the current default;
+- preserves supported model choices, custom provider models, customized workspace sandboxes, MCP servers, projects, providers, notices, and unrelated settings;
+- validates the final result before writing it.
+
+Comments and formatting are preserved when a change can be patched safely in place. If unusual TOML syntax makes a surgical edit ambiguous, the tool performs a canonical TOML rewrite and reports a `reformat` operation. No silent configuration archaeology.
+
+## Check and automate
+
+The examples below use `pn`; `npx --yes codex-config@latest` and `bunx codex-config@latest` accept the same commands and options.
 
 ```bash
 # Show pending changes without writing
-pnpm --silent dlx codex-config@latest diff
+pn --silent dlx codex-config@latest diff
 
 # Exit with status 1 when an update is needed
-pnpm --silent dlx codex-config@latest check
+pn --silent dlx codex-config@latest check
 
 # Validate the current config and report compatibility issues
-pnpm --silent dlx codex-config@latest doctor
+pn --silent dlx codex-config@latest doctor
 ```
 
 All commands support `--json` for machine-readable output.
@@ -63,20 +98,13 @@ All commands support `--json` for machine-readable output.
 Codex profiles use separate files under `$CODEX_HOME`:
 
 ```bash
-pnpm --silent dlx codex-config@latest apply --profile work
+pn --silent dlx codex-config@latest apply --profile work
 codex --profile work
 ```
 
 Use `--target /path/to/config.toml` to manage another file. Use `--template /path/to/template.toml` to supply your own recommendations.
 
 Legacy `profile = "..."` selectors and `[profiles.<name>]` tables are reported but are not split automatically: that migration creates multiple sibling files and may conflict with existing profile files. Move each legacy table to `$CODEX_HOME/<name>.config.toml`, then manage it with `--profile <name>`.
-
-## Install globally
-
-```bash
-pnpm add --global codex-config
-codex-config apply
-```
 
 ## Development
 

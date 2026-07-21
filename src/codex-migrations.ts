@@ -63,6 +63,8 @@ const RETIRED_ROOT_KEYS = [
   "zsh_path",
 ] as const;
 
+const RETIRED_UI_KEYS = new Set(["show_plan"]);
+
 const DEPRECATED_JS_REPL_KEYS = [
   "js_repl_node_path",
   "js_repl_node_module_dirs",
@@ -426,8 +428,9 @@ function migrateLegacyUi(
   }
 
   const tuiKeySet = new Set<string>(CODEX_TARGET.tuiKeys);
+  const legacyUiEntries = Object.entries(legacyUi);
   const recognizedUi = Object.fromEntries(
-    Object.entries(legacyUi).filter(([key]) => tuiKeySet.has(key)),
+    legacyUiEntries.filter(([key]) => tuiKeySet.has(key)),
   );
   const tuiUpdates = missingValues(getPath(parsed, ["tui"]), recognizedUi);
   const currentTui = getPath(parsed, ["tui"]);
@@ -450,11 +453,13 @@ function migrateLegacyUi(
     setMigrationValue(migrationValues, ["tui"], tuiUpdates);
   }
 
-  const recognizedKeys = Object.keys(recognizedUi);
-  if (recognizedKeys.length === Object.keys(legacyUi).length) {
+  const removableKeys = legacyUiEntries
+    .map(([key]) => key)
+    .filter((key) => tuiKeySet.has(key) || RETIRED_UI_KEYS.has(key));
+  if (removableKeys.length === legacyUiEntries.length) {
     removalPaths.push(["ui"]);
   } else {
-    removalPaths.push(...recognizedKeys.map((key) => ["ui", key]));
+    removalPaths.push(...removableKeys.map((key) => ["ui", key]));
   }
 }
 

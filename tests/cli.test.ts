@@ -166,6 +166,7 @@ web_search_request = false
 
 [ui]
 notifications = true
+show_plan = "true"
 `,
       "utf8",
     );

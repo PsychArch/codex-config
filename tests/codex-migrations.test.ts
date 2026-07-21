@@ -573,6 +573,7 @@ terminal_title = ["toString", "__proto__", "model-name"]
 [ui]
 notifications = true
 theme = "legacy-theme"
+show_plan = "true"
 custom_client_state = "must-not-discard"
 
 [tui]
@@ -588,6 +589,22 @@ notifications = false
     });
     expect(parsed.ui).toEqual({ custom_client_state: "must-not-discard" });
     expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+  });
+
+  test("removes the retired ui show_plan setting and is idempotent", () => {
+    const target = `model = "gpt-5.6-sol"
+
+[ui]
+show_plan = "true"
+`;
+
+    const plan = planCodexMigrations(target);
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parse(plan.outputText)).toEqual({ model: "gpt-5.6-sol" });
+    expect(plan.operations).toContainEqual({ action: "remove", path: "ui" });
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(plan.outputText);
   });
 
   test("handles the four reported incompatible keys and is idempotent", () => {

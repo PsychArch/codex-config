@@ -77,6 +77,17 @@ default_permissions = ":read-only"
     });
   });
 
+  test("preserves personality none for GPT-5.6 models", () => {
+    const target = `model = "gpt-5.6-sol"
+personality = "none"
+`;
+
+    const plan = planCodexMigrations(target);
+
+    expect(plan.changed).toBe(false);
+    expect(plan.outputText).toBe(target);
+  });
+
   test("preserves custom provider model and personality settings", () => {
     const target = `model = "company-coder"
 model_provider = "company"
@@ -551,6 +562,54 @@ notifications = false
       ]),
     );
     expect(second.changed).toBe(false);
+  });
+
+  test("migrates Codex 0.145 agent settings and removes retired no-ops", () => {
+    const target = `model = "gpt-5.6-sol"
+model_supports_reasoning_summaries = true
+
+[agents]
+enabled = true
+max_threads = 4
+job_max_runtime_seconds = 900
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed).toEqual({
+      model: "gpt-5.6-sol",
+      agents: {
+        enabled: true,
+        max_concurrent_threads_per_session: 4,
+      },
+    });
+    expect(plan.operations).toEqual(
+      expect.arrayContaining([
+        { action: "add", path: "agents.max_concurrent_threads_per_session" },
+        { action: "remove", path: "agents.max_threads" },
+        { action: "remove", path: "agents.job_max_runtime_seconds" },
+        { action: "remove", path: "model_supports_reasoning_summaries" },
+      ]),
+    );
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(plan.outputText);
+  });
+
+  test("keeps the canonical 0.145 agent thread limit when the alias conflicts", () => {
+    const plan = planCodexMigrations(`[agents]
+max_threads = 4
+max_concurrent_threads_per_session = 7
+`);
+
+    expect(parse(plan.outputText)).toEqual({
+      agents: { max_concurrent_threads_per_session: 7 },
+    });
+    expect(plan.operations).not.toContainEqual({
+      action: "update",
+      path: "agents.max_concurrent_threads_per_session",
+    });
   });
 
   test("preserves prototype-like TUI item identifiers as ordinary strings", () => {

@@ -104,6 +104,16 @@ wire_api = "responses"
     );
   });
 
+  test("accepts personality none for GPT-5.6", async () => {
+    const inspection = await inspectCodexConfig(
+      'model = "gpt-5.6-sol"\npersonality = "none"\n',
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
   test("enforces model-specific reasoning efforts", async () => {
     const luna = await inspectCodexConfig(
       'model = "gpt-5.6-luna"\nmodel_reasoning_effort = "ultra"\n',

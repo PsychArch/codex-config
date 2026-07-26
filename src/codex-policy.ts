@@ -140,13 +140,14 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
   if (
     usesOpenAIModelCatalog &&
     hasPath(parsed, ["personality"]) &&
+    getPath(parsed, ["personality"]) !== "none" &&
     !model?.supportsPersonality
   ) {
     issues.push({
       severity: "warning",
       code: "unsupported_personality",
       path: "personality",
-      message: "GPT-5.6 models use model-owned personality instructions and ignore this selector.",
+      message: "This GPT-5.6 model does not provide selectable friendly or pragmatic personality instructions.",
     });
   }
 

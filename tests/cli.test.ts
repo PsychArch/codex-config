@@ -152,7 +152,7 @@ view_image_tool = true
     expect(doctor.target.clean).toBe(true);
   });
 
-  test("apply handles the four reported compatibility failures and is idempotent", async () => {
+  test("apply handles the Codex 0.145 compatibility failures and is idempotent", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const templatePath = join(directory, "config.toml.template");
     const targetPath = join(directory, "config.toml");
@@ -163,6 +163,12 @@ view_image_tool = true
 disable_response_storage = true
 preferred_auth_method = "apikey"
 web_search_request = false
+model_supports_reasoning_summaries = true
+
+[agents]
+enabled = true
+max_threads = 4
+job_max_runtime_seconds = 900
 
 [ui]
 notifications = true
@@ -190,6 +196,10 @@ show_plan = "true"
         { action: "remove", path: "disable_response_storage" },
         { action: "remove", path: "preferred_auth_method" },
         { action: "remove", path: "web_search_request" },
+        { action: "add", path: "agents.max_concurrent_threads_per_session" },
+        { action: "remove", path: "agents.max_threads" },
+        { action: "remove", path: "agents.job_max_runtime_seconds" },
+        { action: "remove", path: "model_supports_reasoning_summaries" },
         { action: "remove", path: "ui" },
       ]),
     );
@@ -198,6 +208,10 @@ show_plan = "true"
     expect(parse(await readFile(targetPath, "utf8"))).toEqual({
       model: "gpt-5.6-sol",
       web_search: "disabled",
+      agents: {
+        enabled: true,
+        max_concurrent_threads_per_session: 4,
+      },
       tui: { notifications: true },
     });
 

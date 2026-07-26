@@ -61,6 +61,11 @@ const RETIRED_ROOT_KEYS = [
   "windows_wsl_setup_acknowledged",
   "commit_attribution",
   "zsh_path",
+  "model_supports_reasoning_summaries",
+] as const;
+
+const RETIRED_CONFIG_PATHS = [
+  ["agents", "job_max_runtime_seconds"],
 ] as const;
 
 const RETIRED_UI_KEYS = new Set(["show_plan"]);
@@ -94,7 +99,11 @@ export function planCodexMigrations(
     }
   }
 
-  if (usesOpenAIModelCatalog && hasPath(parsed, ["personality"])) {
+  if (
+    usesOpenAIModelCatalog &&
+    hasPath(parsed, ["personality"]) &&
+    getPath(parsed, ["personality"]) !== "none"
+  ) {
     removalPaths.push(["personality"]);
   }
 
@@ -140,6 +149,11 @@ export function planCodexMigrations(
   for (const key of RETIRED_ROOT_KEYS) {
     if (hasPath(parsed, [key])) {
       removalPaths.push([key]);
+    }
+  }
+  for (const path of RETIRED_CONFIG_PATHS) {
+    if (hasPath(parsed, [...path])) {
+      removalPaths.push([...path]);
     }
   }
   if (hasPath(parsed, ["experimental_thread_store_endpoint"])) {

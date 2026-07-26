@@ -59,6 +59,11 @@ describe("sync-codex", () => {
     expect(target.tuiKeys).toEqual(["notifications"]);
     expect(target.configKeyAliases).toEqual([
       {
+        tablePath: ["agents"],
+        legacyKey: "max_threads",
+        canonicalKey: "max_concurrent_threads_per_session",
+      },
+      {
         tablePath: ["memories"],
         legacyKey: "no_memories_if_mcp_or_web_search",
         canonicalKey: "disable_on_external_context",
@@ -100,11 +105,18 @@ async function writeCodexFixture(sourceRoot: string): Promise<void> {
     canonical_key: &'static str,
 }
 
-const CONFIG_KEY_ALIASES: &[ConfigKeyAlias] = &[ConfigKeyAlias {
-    table_path: &["memories"],
-    legacy_key: "no_memories_if_mcp_or_web_search",
-    canonical_key: "disable_on_external_context",
-}];
+const CONFIG_KEY_ALIASES: &[ConfigKeyAlias] = &[
+    ConfigKeyAlias {
+        table_path: &["agents"],
+        legacy_key: "max_threads",
+        canonical_key: "max_concurrent_threads_per_session",
+    },
+    ConfigKeyAlias {
+        table_path: &["memories"],
+        legacy_key: "no_memories_if_mcp_or_web_search",
+        canonical_key: "disable_on_external_context",
+    },
+];
 `,
     ],
   ]);

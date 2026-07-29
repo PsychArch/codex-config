@@ -177,6 +177,26 @@ ${CODEX_TARGET.retiredFeatureKeys.map((key) => `${key} = true`).join("\n")}
     expect(second.changed).toBe(false);
   });
 
+  test("removes item_ids after Codex 0.146 made it a no-op", () => {
+    expect(CODEX_TARGET.removedFeatureKeys).toContain("item_ids");
+    const target = `model = "gpt-5.6-sol"
+
+[features]
+item_ids = false
+memories = true
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed.features).toEqual({ memories: true });
+    expect(plan.operations).toEqual([
+      { action: "remove", path: "features.item_ids" },
+    ]);
+    expect(second.changed).toBe(false);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],

@@ -13,6 +13,7 @@ enabled = false
 
 [features]
 memories = true
+multi_agent_v2 = true
 
 [tui]
 alternate_screen = "never"

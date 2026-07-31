@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { parse } from "smol-toml";
 import { describe, expect, test } from "vitest";
 import { CODEX_TARGET, inspectCodexConfig } from "../src/codex-policy.js";
 
@@ -9,6 +10,15 @@ describe("inspectCodexConfig", () => {
     await expect(
       inspectCodexConfig(template, "template", { requireModel: true }),
     ).resolves.toEqual({ valid: true, clean: true, issues: [] });
+  });
+
+  test("enables multi-agent v2 in the bundled profile", async () => {
+    const template = parse(await readFile("config.toml.template", "utf8")) as {
+      features?: Record<string, unknown>;
+    };
+
+    expect(template.features?.multi_agent_v2).toBe(true);
+    expect(template.features).not.toHaveProperty("multi_agent");
   });
 
   test("does not classify schema-recognized feature keys as retired", async () => {

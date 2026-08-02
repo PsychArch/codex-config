@@ -21,6 +21,14 @@ describe("inspectCodexConfig", () => {
     expect(template.features).not.toHaveProperty("multi_agent");
   });
 
+  test("allows structured user input in default mode", async () => {
+    const template = parse(await readFile("config.toml.template", "utf8")) as {
+      features?: Record<string, unknown>;
+    };
+
+    expect(template.features?.default_mode_request_user_input).toBe(true);
+  });
+
   test("does not classify schema-recognized feature keys as retired", async () => {
     const schema = JSON.parse(await readFile("config.schema.json", "utf8")) as {
       properties: { features: { properties: Record<string, unknown> } };

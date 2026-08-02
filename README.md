@@ -51,6 +51,7 @@ The bundled profile is an opinionated setup for trusted local development:
 | Fast service tier | Priority processing when available |
 | Memories enabled | Continuity across Codex sessions |
 | Multi-agent v2 | Task-path-based sub-agent delegation |
+| Default-mode questions | Structured user-input prompts without switching to Plan mode |
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 

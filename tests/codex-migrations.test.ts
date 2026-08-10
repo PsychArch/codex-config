@@ -197,6 +197,26 @@ memories = true
     expect(second.changed).toBe(false);
   });
 
+  test("removes code_mode_buffered_exec after Codex 0.147 made it a no-op", () => {
+    expect(CODEX_TARGET.removedFeatureKeys).toContain("code_mode_buffered_exec");
+    const target = `model = "gpt-5.6-sol"
+
+[features]
+code_mode_buffered_exec = true
+memories = true
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed.features).toEqual({ memories: true });
+    expect(plan.operations).toEqual([
+      { action: "remove", path: "features.code_mode_buffered_exec" },
+    ]);
+    expect(second.changed).toBe(false);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],

@@ -40,6 +40,44 @@ describe("inspectCodexConfig", () => {
     );
   });
 
+  test("accepts representative Codex 0.147 configuration surfaces", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "gpt-5.6-sol"
+
+[features]
+apply_patch_preserve_line_endings = true
+background_paginated_rollout_migration = true
+code_mode_interrupt = true
+executed_tool_call_metadata = true
+guardian_reuse_parent_compaction = true
+image_resize_notice = true
+recommended_plugins = true
+unified_image_budget = true
+view_image = true
+
+[features.code_mode]
+enabled = true
+default_exec_yield_time_ms = 10000
+
+[features.tool_registry]
+error_on_tool_collisions = true
+turn_metadata_includes_tool_info = true
+
+[features.multi_agent_v2]
+enabled = true
+subagent_developer_instructions = "Use the bounded task instructions."
+
+[mcp_servers.docs]
+url = "https://docs.example.test/mcp"
+omit_tools_from = ["code_mode", "deferred"]
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
   test("rejects models outside the GPT-5.6 family", async () => {
     const inspection = await inspectCodexConfig('model = "gpt-5.5"\n', "target", {
       requireModel: true,

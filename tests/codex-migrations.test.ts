@@ -1,6 +1,9 @@
 import { parse } from "smol-toml";
 import { describe, expect, test } from "vitest";
-import { planCodexMigrations } from "../src/codex-migrations.js";
+import {
+  adaptCodexTemplate,
+  planCodexMigrations,
+} from "../src/codex-migrations.js";
 import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 describe("planCodexMigrations", () => {
@@ -815,5 +818,51 @@ ui = "custom-client-state"
 
     expect(plan.changed).toBe(false);
     expect(plan.outputText).toBe(target);
+  });
+});
+
+describe("adaptCodexTemplate", () => {
+  const template = `model = "gpt-5.6-sol"
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+default_permissions = ":danger-full-access"
+`;
+
+  test("keeps expanded context defaults for managed GPT-5.6 Sol", () => {
+    expect(parse(adaptCodexTemplate('model = "gpt-5.6-sol"\n', template))).toEqual(
+      parse(template),
+    );
+    expect(parse(adaptCodexTemplate("", template))).toEqual(parse(template));
+  });
+
+  test("does not inject Sol context defaults into alternate or custom models", () => {
+    const terra = parse(adaptCodexTemplate('model = "gpt-5.6-terra"\n', template));
+    const custom = parse(
+      adaptCodexTemplate(
+        `model = "company-coder"
+model_provider = "company"
+`,
+        template,
+      ),
+    );
+
+    expect(terra).toEqual({
+      model: "gpt-5.6-sol",
+      default_permissions: ":danger-full-access",
+    });
+    expect(custom).toEqual(terra);
+  });
+
+  test("combines context and customized workspace permission adaptation", () => {
+    const adapted = adaptCodexTemplate(
+      `model = "gpt-5.6-terra"
+
+[sandbox_workspace_write]
+writable_roots = ["/workspace/cache"]
+`,
+      template,
+    );
+
+    expect(parse(adapted)).toEqual({ model: "gpt-5.6-sol" });
   });
 });

@@ -183,15 +183,26 @@ export function planCodexMigrations(
 
 export function adaptCodexTemplate(targetText: string, templateText: string): string {
   const parsed = parseTarget(targetText);
+  const removalPaths: string[][] = [];
   const workspaceWrite = getPath(parsed, ["sandbox_workspace_write"]);
   if (
     getPath(parsed, ["default_permissions"]) === undefined &&
     isRecord(workspaceWrite) &&
     Object.keys(workspaceWrite).length > 0
   ) {
-    return planConfigRemovals(templateText, [["default_permissions"]]).outputText;
+    removalPaths.push(["default_permissions"]);
   }
-  return templateText;
+  const model = getPath(parsed, ["model"]);
+  if (
+    !usesManagedOpenAIModelCatalog(parsed) ||
+    (model !== undefined && model !== CODEX_TARGET.defaultModel)
+  ) {
+    removalPaths.push(
+      ["model_context_window"],
+      ["model_auto_compact_token_limit"],
+    );
+  }
+  return planConfigRemovals(templateText, removalPaths).outputText;
 }
 
 export const STATUS_LINE_LEGACY_IDS = Object.freeze(Object.keys(STATUS_LINE_ALIASES));

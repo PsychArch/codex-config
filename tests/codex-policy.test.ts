@@ -21,6 +21,18 @@ describe("inspectCodexConfig", () => {
     expect(template.features).not.toHaveProperty("multi_agent");
   });
 
+  test("requests the expanded GPT-5.6 Sol context window", async () => {
+    const template = parse(await readFile("config.toml.template", "utf8")) as {
+      model?: unknown;
+      model_context_window?: unknown;
+      model_auto_compact_token_limit?: unknown;
+    };
+
+    expect(template.model).toBe("gpt-5.6-sol");
+    expect(template.model_context_window).toBe(1_000_000);
+    expect(template.model_auto_compact_token_limit).toBe(900_000);
+  });
+
   test("allows structured user input in default mode", async () => {
     const template = parse(await readFile("config.toml.template", "utf8")) as {
       features?: Record<string, unknown>;

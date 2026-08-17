@@ -42,6 +42,47 @@ describe("cli", () => {
     expect(result.mode).toBe("override");
   });
 
+  test("applies expanded context only to managed Sol configurations", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
+    const solPath = join(directory, "sol.toml");
+    const terraPath = join(directory, "terra.toml");
+    const explicitPath = join(directory, "explicit.toml");
+    await writeFile(solPath, 'model = "gpt-5.6-sol"\n', "utf8");
+    await writeFile(terraPath, 'model = "gpt-5.6-terra"\n', "utf8");
+    await writeFile(
+      explicitPath,
+      `model = "gpt-5.6-sol"
+model_context_window = 500000
+model_auto_compact_token_limit = 450000
+`,
+      "utf8",
+    );
+
+    await runCli(["apply", "--target", solPath, "--json"]);
+    await runCli(["apply", "--target", terraPath, "--json"]);
+    await runCli(["apply", "--target", explicitPath, "--json"]);
+
+    const sol = parse(await readFile(solPath, "utf8")) as Record<string, unknown>;
+    const terra = parse(await readFile(terraPath, "utf8")) as Record<string, unknown>;
+    const explicit = parse(await readFile(explicitPath, "utf8")) as Record<string, unknown>;
+    expect(sol.model_context_window).toBe(1_000_000);
+    expect(sol.model_auto_compact_token_limit).toBe(900_000);
+    expect(terra).not.toHaveProperty("model_context_window");
+    expect(terra).not.toHaveProperty("model_auto_compact_token_limit");
+    expect(explicit.model_context_window).toBe(500_000);
+    expect(explicit.model_auto_compact_token_limit).toBe(450_000);
+
+    const second = JSON.parse(
+      (await runCli(["apply", "--target", solPath, "--json"])).stdout,
+    ) as { changed: boolean };
+    expect(second.changed).toBe(false);
+
+    await runCli(["apply", "--target", explicitPath, "--force", "--json"]);
+    const forced = parse(await readFile(explicitPath, "utf8")) as Record<string, unknown>;
+    expect(forced.model_context_window).toBe(1_000_000);
+    expect(forced.model_auto_compact_token_limit).toBe(900_000);
+  });
+
   test("--override-all is not accepted", async () => {
     await expect(runCli(["diff", "--override-all"])).rejects.toMatchObject({
       stderr: expect.stringContaining("unknown option '--override-all'"),

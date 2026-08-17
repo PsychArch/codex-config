@@ -828,19 +828,37 @@ model_auto_compact_token_limit = 900000
 default_permissions = ":danger-full-access"
 `;
 
-  test("keeps expanded context defaults for managed GPT-5.6 Sol", () => {
+  test("keeps expanded context defaults for GPT-5.6 Sol", () => {
     expect(parse(adaptCodexTemplate('model = "gpt-5.6-sol"\n', template))).toEqual(
       parse(template),
     );
     expect(parse(adaptCodexTemplate("", template))).toEqual(parse(template));
   });
 
+  test("keeps Sol context defaults through generic provider routes", () => {
+    const provider = adaptCodexTemplate(
+      `model = "gpt-5.6-sol"
+model_provider = "example-gateway"
+`,
+      template,
+    );
+    const baseUrl = adaptCodexTemplate(
+      `model = "gpt-5.6-sol"
+openai_base_url = "https://gateway.example.test/v1"
+`,
+      template,
+    );
+
+    expect(parse(provider)).toEqual(parse(template));
+    expect(parse(baseUrl)).toEqual(parse(template));
+  });
+
   test("does not inject Sol context defaults into alternate or custom models", () => {
     const terra = parse(adaptCodexTemplate('model = "gpt-5.6-terra"\n', template));
     const custom = parse(
       adaptCodexTemplate(
-        `model = "company-coder"
-model_provider = "company"
+        `model = "example-coder"
+model_provider = "example-gateway"
 `,
         template,
       ),

@@ -193,10 +193,7 @@ export function adaptCodexTemplate(targetText: string, templateText: string): st
     removalPaths.push(["default_permissions"]);
   }
   const model = getPath(parsed, ["model"]);
-  if (
-    !usesManagedOpenAIModelCatalog(parsed) ||
-    (model !== undefined && model !== CODEX_TARGET.defaultModel)
-  ) {
+  if (model !== undefined && model !== CODEX_TARGET.defaultModel) {
     removalPaths.push(
       ["model_context_window"],
       ["model_auto_compact_token_limit"],

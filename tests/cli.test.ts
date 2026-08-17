@@ -42,12 +42,25 @@ describe("cli", () => {
     expect(result.mode).toBe("override");
   });
 
-  test("applies expanded context only to managed Sol configurations", async () => {
+  test("applies expanded context to Sol across provider routes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const solPath = join(directory, "sol.toml");
+    const gatewayPath = join(directory, "gateway.toml");
     const terraPath = join(directory, "terra.toml");
     const explicitPath = join(directory, "explicit.toml");
     await writeFile(solPath, 'model = "gpt-5.6-sol"\n', "utf8");
+    await writeFile(
+      gatewayPath,
+      `model = "gpt-5.6-sol"
+model_provider = "example-gateway"
+
+[model_providers.example-gateway]
+name = "Example gateway"
+base_url = "https://gateway.example.test/v1"
+wire_api = "responses"
+`,
+      "utf8",
+    );
     await writeFile(terraPath, 'model = "gpt-5.6-terra"\n', "utf8");
     await writeFile(
       explicitPath,
@@ -59,14 +72,18 @@ model_auto_compact_token_limit = 450000
     );
 
     await runCli(["apply", "--target", solPath, "--json"]);
+    await runCli(["apply", "--target", gatewayPath, "--json"]);
     await runCli(["apply", "--target", terraPath, "--json"]);
     await runCli(["apply", "--target", explicitPath, "--json"]);
 
     const sol = parse(await readFile(solPath, "utf8")) as Record<string, unknown>;
+    const gateway = parse(await readFile(gatewayPath, "utf8")) as Record<string, unknown>;
     const terra = parse(await readFile(terraPath, "utf8")) as Record<string, unknown>;
     const explicit = parse(await readFile(explicitPath, "utf8")) as Record<string, unknown>;
     expect(sol.model_context_window).toBe(1_000_000);
     expect(sol.model_auto_compact_token_limit).toBe(900_000);
+    expect(gateway.model_context_window).toBe(1_000_000);
+    expect(gateway.model_auto_compact_token_limit).toBe(900_000);
     expect(terra).not.toHaveProperty("model_context_window");
     expect(terra).not.toHaveProperty("model_auto_compact_token_limit");
     expect(explicit.model_context_window).toBe(500_000);

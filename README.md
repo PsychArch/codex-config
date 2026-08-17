@@ -56,7 +56,7 @@ The bundled profile is an opinionated setup for trusted local development:
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 
-Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults are added only for the managed `gpt-5.6-sol` model; alternate and custom-provider models keep their own context behavior.
+Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-5.6-sol` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
 
 > [!WARNING]
 > The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.

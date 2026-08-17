@@ -38,5 +38,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish
+      - name: Publish prerelease
+        if: github.event_name == 'release' && github.event.release.prerelease
+        run: npm publish --access public --tag alpha
+
+      - name: Publish stable release
+        if: github.event_name != 'release' || !github.event.release.prerelease
         run: npm publish --access public

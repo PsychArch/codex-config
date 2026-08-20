@@ -90,6 +90,50 @@ omit_tools_from = ["code_mode", "deferred"]
     expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
   });
 
+  test("accepts representative Codex 0.148 configuration surfaces", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "gpt-5.6-sol"
+responses_api_metadata = { product_surface = "codex-config-test" }
+
+[goals]
+max_goal_token_budget = 20000
+
+[features]
+guardian_enhanced_node_repl_transcripts = true
+guardian_node_repl_transcript_images = true
+psp = true
+retain_client_developer_messages = true
+unbounded_connection_retries = true
+
+[features.guardianv2]
+enabled = true
+max_action_tokens = 2000
+max_classifier_instruction_tokens = 2000
+reasoning_effort = "high"
+review_threshold = 0.7
+
+[features.guardianv2.transcript]
+max_message_entry_tokens = 1000
+max_message_transcript_tokens = 5000
+max_recent_non_user_entries = 5
+max_tool_entry_tokens = 1000
+max_tool_transcript_tokens = 5000
+sources = ["tool_calls", "tool_outputs", "reasoning"]
+
+[mcp_servers.local]
+url = "http://127.0.0.1:8765/mcp"
+http_headers_helper = "auth-cli headers"
+
+[mcp_servers.local.oauth]
+callback_port = 8766
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
   test("rejects models outside the GPT-5.6 family", async () => {
     const inspection = await inspectCodexConfig('model = "gpt-5.5"\n', "target", {
       requireModel: true,

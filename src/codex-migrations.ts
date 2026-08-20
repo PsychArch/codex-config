@@ -62,6 +62,7 @@ const RETIRED_ROOT_KEYS = [
   "commit_attribution",
   "zsh_path",
   "model_supports_reasoning_summaries",
+  "debug",
 ] as const;
 
 const RETIRED_CONFIG_PATHS = [

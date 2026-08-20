@@ -220,6 +220,30 @@ memories = true
     expect(second.changed).toBe(false);
   });
 
+  test("removes the config lock debug table retired by Codex 0.148", () => {
+    const target = `model = "gpt-5.6-sol"
+
+[debug.config_lockfile]
+allow_codex_version_mismatch = true
+export_dir = "/tmp/codex-config-locks"
+load_path = "/tmp/codex-config-lock.toml"
+save_fields_resolved_from_model_catalog = true
+
+[features]
+memories = true
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed).not.toHaveProperty("debug");
+    expect(parsed.features).toEqual({ memories: true });
+    expect(plan.operations).toEqual([{ action: "remove", path: "debug" }]);
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(plan.outputText);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],

@@ -134,6 +134,69 @@ callback_port = 8766
     expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
   });
 
+  test("accepts representative Codex 0.149 configuration surfaces", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "anything"
+model_provider = "amazon-bedrock-runtime"
+
+[skills]
+max_context_tokens = 8000
+
+[features]
+cwd_relative_turn_diffs = true
+in_app_chat = true
+in_app_dictation = true
+
+[features.guardianv2]
+enabled = true
+max_parent_compaction_tokens = 4000
+max_tool_call_lag = 2
+review_scope = { sandboxed_exec_commands = false }
+
+[features.guardianv2.transcript]
+include_images = true
+
+[model_providers.amazon-bedrock]
+base_url = "https://bedrock.example.test/v1"
+http_headers = { x-example = "mantle" }
+supports_standalone_web_search = false
+
+[model_providers.amazon-bedrock.auth]
+command = "fetch-bedrock-token"
+
+[model_providers.amazon-bedrock-runtime]
+base_url = "https://bedrock-runtime.example.test/v1"
+http_headers = { x-example = "runtime" }
+
+[model_providers.amazon-bedrock-runtime.aws]
+profile = "example"
+region = "us-west-2"
+
+[model_providers.amazon-bedrock-runtime.aws.auth_refresh]
+command = "aws"
+args = ["sso", "login", "--profile", "example"]
+timeout_ms = 300000
+
+[tui.keymap.global]
+open_agents = "f12"
+
+[tui.keymap.agents]
+search = "f6"
+new_task = "f7"
+toggle_grouping = "f8"
+rename = "f9"
+stop = "f10"
+
+[tui.keymap.vim_normal]
+replace_char = "r"
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
   test("rejects models outside the GPT-5.6 family", async () => {
     const inspection = await inspectCodexConfig('model = "gpt-5.5"\n', "target", {
       requireModel: true,
@@ -566,6 +629,46 @@ name = "Not allowed"
         }),
       ]),
     );
+  });
+
+  test("enforces Bedrock authentication constraints from Codex runtime", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "anything"
+model_provider = "amazon-bedrock-runtime"
+
+[model_providers.amazon-bedrock-runtime]
+env_key = "BEDROCK_TOKEN"
+
+[model_providers.amazon-bedrock-runtime.aws]
+region = "us-west-2"
+
+[model_providers.amazon-bedrock-runtime.aws.auth_refresh]
+command = "custom-refresh"
+
+[model_providers.amazon-bedrock.auth]
+command = "   "
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "amazon_bedrock_override",
+          path: "model_providers.amazon-bedrock-runtime.env_key",
+        }),
+        expect.objectContaining({
+          code: "model_provider_aws_refresh_command",
+          path: "model_providers.amazon-bedrock-runtime.aws.auth_refresh.command",
+        }),
+        expect.objectContaining({
+          code: "model_provider_auth_command_required",
+          path: "model_providers.amazon-bedrock.auth.command",
+        }),
+      ]),
+    );
+    expect(inspection.valid).toBe(false);
   });
 
   test("rejects negative bigint MCP durations", async () => {

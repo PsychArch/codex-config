@@ -288,6 +288,57 @@ show_plan = "true"
     expect(second).toMatchObject({ changed: false, operations: [] });
   });
 
+  test("apply migrates Codex 0.149 approval policy without broadening permissions", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
+    const templatePath = join(directory, "config.toml.template");
+    const targetPath = join(directory, "config.toml");
+    await writeFile(
+      templatePath,
+      `model = "gpt-5.6-sol"
+approval_policy = "never"
+`,
+      "utf8",
+    );
+    await writeFile(
+      targetPath,
+      `model = "gpt-5.6-sol"
+approval_policy = "untrusted"
+experimental_thread_config_endpoint = "https://config.example.test/threads"
+
+[features]
+send_async_message = true
+`,
+      "utf8",
+    );
+
+    await runCli([
+      "apply",
+      "--template",
+      templatePath,
+      "--target",
+      targetPath,
+      "--json",
+    ]);
+    const applied = parse(await readFile(targetPath, "utf8")) as Record<string, any>;
+    const second = JSON.parse(
+      (
+        await runCli([
+          "apply",
+          "--template",
+          templatePath,
+          "--target",
+          targetPath,
+          "--json",
+        ])
+      ).stdout,
+    ) as { changed: boolean };
+
+    expect(applied.approval_policy).toBe("on-request");
+    expect(applied).not.toHaveProperty("experimental_thread_config_endpoint");
+    expect(applied.features).not.toHaveProperty("send_async_message");
+    expect(second.changed).toBe(false);
+  });
+
   test("normalizes runtime-compatible aliases in a custom template", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const templatePath = join(directory, "config.toml.template");

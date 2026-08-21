@@ -587,6 +587,7 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
   }
 
   const reserved = new Set(["openai", "ollama", "lmstudio"]);
+  const bedrockProviders = new Set(["amazon-bedrock", "amazon-bedrock-runtime"]);
   for (const [name, value] of Object.entries(providers)) {
     const basePath = `model_providers.${formatPathSegment(name)}`;
     if (reserved.has(name)) {
@@ -602,23 +603,29 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
     if (!isRecord(value)) {
       continue;
     }
-    if (name === "amazon-bedrock") {
+    if (bedrockProviders.has(name)) {
       for (const [field, fieldValue] of Object.entries(value)) {
         const isDefaultField =
           (field === "name" && fieldValue === "") ||
           (field === "wire_api" && fieldValue === "responses") ||
           (field === "requires_openai_auth" && fieldValue === false) ||
-          (field === "supports_websockets" && fieldValue === false);
-        if (field !== "aws" && !isDefaultField) {
+          (field === "supports_websockets" && fieldValue === false) ||
+          (field === "supports_standalone_web_search" && fieldValue === false);
+        const isSupportedOverride = ["base_url", "auth", "http_headers", "aws"].includes(
+          field,
+        );
+        if (!isSupportedOverride && !isDefaultField) {
           issues.push(
             runtimeIssue(
               "amazon_bedrock_override",
               `${basePath}.${field}`,
-              "amazon-bedrock only supports overriding aws.profile and aws.region.",
+              `${name} only supports overriding base_url, auth, http_headers, aws.profile, aws.region, and aws.auth_refresh.`,
             ),
           );
         }
       }
+      appendAwsAuthIssues(issues, value, basePath);
+      appendProviderAuthIssues(issues, value, basePath);
       continue;
     }
     if (typeof value.name !== "string" || value.name.trim() === "") {
@@ -635,49 +642,106 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
         runtimeIssue(
           "model_provider_aws_reserved",
           `${basePath}.aws`,
-          "AWS authentication is only supported for amazon-bedrock.",
+          "AWS authentication is only supported for amazon-bedrock or amazon-bedrock-runtime.",
         ),
       );
     }
 
-    const auth = value.auth;
-    if (isRecord(auth)) {
-      if (typeof auth.command !== "string" || auth.command.trim() === "") {
-        issues.push(
-          runtimeIssue(
-            "model_provider_auth_command_required",
-            `${basePath}.auth.command`,
-            "Provider auth command must not be empty.",
-          ),
-        );
-      }
-      for (const field of [
-        "env_key",
-        "experimental_bearer_token",
-        "requires_openai_auth",
-      ] as const) {
-        if (
-          Object.prototype.hasOwnProperty.call(value, field) &&
-          (field !== "requires_openai_auth" || value[field] === true)
-        ) {
-          issues.push(
-            runtimeIssue(
-              "model_provider_auth_conflict",
-              `${basePath}.${field}`,
-              `${field} cannot be combined with command-backed auth.`,
-            ),
-          );
-        }
-      }
-    }
+    appendProviderAuthIssues(issues, value, basePath);
   }
   return issues;
+}
+
+function appendAwsAuthIssues(
+  issues: ConfigIssue[],
+  provider: Record<string, unknown>,
+  basePath: string,
+): void {
+  const aws = provider.aws;
+  if (!isRecord(aws)) {
+    return;
+  }
+
+  for (const field of [
+    "env_key",
+    "experimental_bearer_token",
+    "auth",
+    "requires_openai_auth",
+  ] as const) {
+    if (
+      Object.prototype.hasOwnProperty.call(provider, field) &&
+      (field !== "requires_openai_auth" || provider[field] === true)
+    ) {
+      issues.push(
+        runtimeIssue(
+          "model_provider_aws_conflict",
+          `${basePath}.${field}`,
+          `${field} cannot be combined with AWS authentication.`,
+        ),
+      );
+    }
+  }
+
+  const authRefresh = aws.auth_refresh;
+  if (isRecord(authRefresh) && authRefresh.command !== "aws") {
+    issues.push(
+      runtimeIssue(
+        "model_provider_aws_refresh_command",
+        `${basePath}.aws.auth_refresh.command`,
+        "AWS auth refresh command must be aws.",
+      ),
+    );
+  }
+}
+
+function appendProviderAuthIssues(
+  issues: ConfigIssue[],
+  provider: Record<string, unknown>,
+  basePath: string,
+): void {
+  const auth = provider.auth;
+  if (!isRecord(auth)) {
+    return;
+  }
+  if (typeof auth.command !== "string" || auth.command.trim() === "") {
+    issues.push(
+      runtimeIssue(
+        "model_provider_auth_command_required",
+        `${basePath}.auth.command`,
+        "Provider auth command must not be empty.",
+      ),
+    );
+  }
+  for (const field of [
+    "env_key",
+    "experimental_bearer_token",
+    "requires_openai_auth",
+  ] as const) {
+    if (
+      Object.prototype.hasOwnProperty.call(provider, field) &&
+      (field !== "requires_openai_auth" || provider[field] === true)
+    ) {
+      issues.push(
+        runtimeIssue(
+          "model_provider_auth_conflict",
+          `${basePath}.${field}`,
+          `${field} cannot be combined with command-backed auth.`,
+        ),
+      );
+    }
+  }
 }
 
 function providerSelectionIssues(parsed: unknown): ConfigIssue[] {
   const issues: ConfigIssue[] = [];
   const providers = getPath(parsed, ["model_providers"]);
-  const builtInProviders = new Set(["openai", "ollama", "lmstudio", "amazon-bedrock"]);
+  const builtInProviders = new Set([
+    "openai",
+    "ollama",
+    "lmstudio",
+    "amazon-bedrock",
+    "amazon-bedrock-runtime",
+  ]);
   for (const field of ["model_provider", "oss_provider"] as const) {
     const provider = getPath(parsed, [field]);
     if (typeof provider !== "string") {

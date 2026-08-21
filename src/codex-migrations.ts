@@ -62,6 +62,7 @@ const RETIRED_ROOT_KEYS = [
   "commit_attribution",
   "zsh_path",
   "model_supports_reasoning_summaries",
+  "experimental_thread_config_endpoint",
   "debug",
 ] as const;
 
@@ -325,8 +326,12 @@ function migrateApprovalPolicy(
 ): void {
   const path = [...scope, "approval_policy"];
   const policy = getPath(parsed, path);
-  if (policy === "unless-allow-listed" || policy === "unless-trusted") {
-    setMigrationValue(migrationValues, path, "untrusted");
+  if (
+    policy === "untrusted" ||
+    policy === "unless-allow-listed" ||
+    policy === "unless-trusted"
+  ) {
+    setMigrationValue(migrationValues, path, "on-request");
     return;
   }
   if (policy === "on-failure") {

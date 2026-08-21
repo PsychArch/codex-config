@@ -244,6 +244,43 @@ memories = true
     expect(second.outputText).toBe(plan.outputText);
   });
 
+  test("migrates settings retired by Codex 0.149", () => {
+    expect(CODEX_TARGET.removedFeatureKeys).toContain("send_async_message");
+    const target = `model = "gpt-5.6-sol"
+approval_policy = "untrusted"
+experimental_thread_config_endpoint = "https://config.example.test/threads"
+
+[features]
+send_async_message = true
+memories = true
+
+[profiles.work]
+model = "gpt-5.6-terra"
+approval_policy = "untrusted"
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed).toEqual({
+      model: "gpt-5.6-sol",
+      approval_policy: "on-request",
+      features: { memories: true },
+      profiles: {
+        work: { model: "gpt-5.6-terra", approval_policy: "on-request" },
+      },
+    });
+    expect(plan.operations).toEqual([
+      { action: "update", path: "approval_policy" },
+      { action: "update", path: "profiles.work.approval_policy" },
+      { action: "remove", path: "features.send_async_message" },
+      { action: "remove", path: "experimental_thread_config_endpoint" },
+    ]);
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(plan.outputText);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],
@@ -484,10 +521,11 @@ disable_on_external_context = false
     });
   });
 
-  test("migrates historical approval policies without reversing their behavior", () => {
+  test("migrates historical approval policies without broadening permissions", () => {
     const plan = planCodexMigrations(`approval_policy = { reject = { sandbox_approval = true, rules = false, skill_approval = true, request_permissions = false, mcp_elicitations = true } }
 
 [profiles.work]
+model = "gpt-5.6-terra"
 approval_policy = "unless-trusted"
 
 [profiles.personal]
@@ -505,7 +543,7 @@ approval_policy = "on-failure"
         },
       },
       profiles: {
-        work: { approval_policy: "untrusted" },
+        work: { model: "gpt-5.6-terra", approval_policy: "on-request" },
         personal: { approval_policy: "on-request" },
       },
     });

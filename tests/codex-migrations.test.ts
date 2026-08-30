@@ -281,6 +281,27 @@ approval_policy = "untrusted"
     expect(second.outputText).toBe(plan.outputText);
   });
 
+  test("removes unified_exec_zsh_fork after Codex 0.151 made it a no-op", () => {
+    expect(CODEX_TARGET.removedFeatureKeys).toContain("unified_exec_zsh_fork");
+    const target = `model = "gpt-5.6-sol"
+
+[features]
+unified_exec_zsh_fork = true
+memories = true
+`;
+
+    const plan = planCodexMigrations(target);
+    const parsed = parse(plan.outputText) as Record<string, any>;
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(parsed.features).toEqual({ memories: true });
+    expect(plan.operations).toEqual([
+      { action: "remove", path: "features.unified_exec_zsh_fork" },
+    ]);
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(plan.outputText);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],

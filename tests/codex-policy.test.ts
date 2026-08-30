@@ -197,6 +197,71 @@ replace_char = "r"
     expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
   });
 
+  test("accepts representative Codex 0.151 configuration surfaces", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "gpt-5.6-sol"
+mcp_optional_startup_grace_ms = 250
+hooks = { Interrupt = [] }
+browser_use = { allow_history_access = false, default_origin_policy = { access = "deny", downloads = "deny", full_cdp_access = "deny", uploads = "deny" }, origins = { "https://example.test" = { access = "allow", downloads = "allow" } } }
+computer_use = { default_app_access = "deny", macos = { bundle_ids = { "com.apple.Safari" = "allow" } }, windows = { aumids = { "Example.App" = "allow" }, exes = [{ publisher_name = "Example", product_name = "Browser", binary_name = "browser.exe", access = "allow" }] } }
+
+[features]
+bedrock_setup_wizard = true
+code_mode_prewarm = true
+compaction_image_budget = true
+content_item_kinds = true
+guardian_ext = true
+in_app_local_automation = true
+shell_snapshot_v2 = true
+skip_host_skill_discovery = true
+step_model_switching = true
+transcript_v2 = true
+write_stdin_approval = true
+
+[features.guardianv2]
+enabled = true
+free_guardian = true
+persist_scores = true
+reuse_parent_compaction = true
+review_scope = { computer_use_only = true }
+
+[features.network_proxy]
+credential_broker = true
+
+[features.token_budget]
+enabled = true
+use_history_notes_extension = true
+
+[otel.tool_result]
+max_bytes = 4096
+
+[mcp_servers.docs]
+url = "https://example.test/mcp"
+
+[mcp_servers.docs.oauth]
+callback_url = "http://127.0.0.1:1455/callback"
+
+[tui.keymap.chat]
+next_permission_mode = "ctrl-right"
+previous_permission_mode = "ctrl-left"
+toggle_voice_mute = "ctrl-m"
+
+[tui.keymap.vim_normal]
+find_forward = "f"
+jump_top = "g g"
+repeat_last_change = "."
+
+[tui.keymap.vim_operator]
+motion_find_forward = "f"
+motion_jump_top = "g g"
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
   test("rejects models outside the GPT-5.6 family", async () => {
     const inspection = await inspectCodexConfig('model = "gpt-5.5"\n', "target", {
       requireModel: true,
@@ -307,7 +372,7 @@ wire_api = "responses"
     expect(sol.valid).toBe(true);
   });
 
-  test("enforces model service tiers while accepting the fast alias", async () => {
+  test("enforces model service tiers while accepting aliases and model-specific tiers", async () => {
     const unsupported = await inspectCodexConfig(
       'model = "gpt-5.6-sol"\nservice_tier = "flex"\n',
       "target",
@@ -318,11 +383,25 @@ wire_api = "responses"
       "target",
       { requireModel: true },
     );
+    const ultrafastSol = await inspectCodexConfig(
+      'model = "gpt-5.6-sol"\nservice_tier = "ultrafast"\n',
+      "target",
+      { requireModel: true },
+    );
+    const ultrafastTerra = await inspectCodexConfig(
+      'model = "gpt-5.6-terra"\nservice_tier = "ultrafast"\n',
+      "target",
+      { requireModel: true },
+    );
 
     expect(unsupported.issues).toContainEqual(
       expect.objectContaining({ code: "unsupported_service_tier", path: "service_tier" }),
     );
     expect(fast.valid).toBe(true);
+    expect(ultrafastSol.valid).toBe(true);
+    expect(ultrafastTerra.issues).toContainEqual(
+      expect.objectContaining({ code: "unsupported_service_tier", path: "service_tier" }),
+    );
   });
 
   test("reports legacy inline profiles without rewriting their contents", async () => {

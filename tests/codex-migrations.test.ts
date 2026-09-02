@@ -302,6 +302,31 @@ memories = true
     expect(second.outputText).toBe(plan.outputText);
   });
 
+  test("preserves sleep_tool after Codex 0.152 restored it", () => {
+    expect(CODEX_TARGET.removedFeatureKeys).not.toContain("sleep_tool");
+    expect(CODEX_TARGET.retiredFeatureKeys).not.toContain("sleep_tool");
+    const target = `model = "gpt-5.6-sol"
+
+[features.sleep_tool]
+enabled = false
+mode = "always_on"
+
+[profiles.work]
+model = "gpt-5.6-terra"
+
+[profiles.work.features]
+sleep_tool = true
+`;
+
+    const plan = planCodexMigrations(target);
+    const second = planCodexMigrations(plan.outputText);
+
+    expect(plan.changed).toBe(false);
+    expect(plan.outputText).toBe(target);
+    expect(second.changed).toBe(false);
+    expect(second.outputText).toBe(target);
+  });
+
   test("maps each legacy sandbox mode without broadening permissions", () => {
     for (const [sandboxMode, permissionProfile] of [
       ["danger-full-access", ":danger-full-access"],

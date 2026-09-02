@@ -13,6 +13,9 @@ service_tier = "fast"
 [analytics]
 enabled = false
 
+[tools.update_plan]
+enabled = true
+
 [features]
 default_mode_request_user_input = true
 memories = true

@@ -41,6 +41,14 @@ describe("inspectCodexConfig", () => {
     expect(template.features?.default_mode_request_user_input).toBe(true);
   });
 
+  test("keeps the update_plan tool enabled after Codex 0.152 made it opt-in", async () => {
+    const template = parse(await readFile("config.toml.template", "utf8")) as {
+      tools?: { update_plan?: { enabled?: unknown } };
+    };
+
+    expect(template.tools?.update_plan?.enabled).toBe(true);
+  });
+
   test("does not classify schema-recognized feature keys as retired", async () => {
     const schema = JSON.parse(await readFile("config.schema.json", "utf8")) as {
       properties: { features: { properties: Record<string, unknown> } };
@@ -254,6 +262,41 @@ repeat_last_change = "."
 [tui.keymap.vim_operator]
 motion_find_forward = "f"
 motion_jump_top = "g g"
+`,
+      "target",
+      { requireModel: true },
+    );
+
+    expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
+  test("accepts representative Codex 0.152 configuration surfaces", async () => {
+    const inspection = await inspectCodexConfig(
+      `model = "gpt-5.6-sol"
+
+[tools.update_plan]
+enabled = true
+
+[features]
+local_thread_store_shared_compression = false
+omit_app_server_notification_media = true
+powershell_shell_version = true
+
+[features.sleep_tool]
+enabled = true
+mode = "always_on"
+
+[mcp_servers.docs]
+url = "https://example.test/mcp"
+
+[mcp_servers.docs.tools.search]
+output_token_limit = 30000
+
+[tui.keymap.vim_search]
+backward = "?"
+forward = "/"
+next = "n"
+previous = "shift-n"
 `,
       "target",
       { requireModel: true },

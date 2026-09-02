@@ -19,6 +19,13 @@ describe("cli", () => {
     });
   });
 
+  test("shows help and exits successfully when invoked without a command", async () => {
+    await expect(runCli([])).resolves.toMatchObject({
+      stdout: expect.stringContaining("Usage: codex-config [options] [command]"),
+      stderr: "",
+    });
+  });
+
   test("-f enables override mode", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const templatePath = join(directory, "config.toml.template");

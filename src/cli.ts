@@ -26,7 +26,10 @@ program
   .name("codex-config")
   .description("Keep your Codex configuration up to date as Codex evolves.")
   .version(packageVersion)
-  .option("--json", "print machine-readable JSON");
+  .option("--json", "print machine-readable JSON")
+  .action(() => {
+    program.outputHelp();
+  });
 
 program
   .command("apply")

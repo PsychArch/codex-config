@@ -170,7 +170,7 @@ async function buildConfigPlan(
     requireModel: true,
   });
   if (!templateInspection.clean) {
-    throw new Error(`Template is not compatible with the GPT-5.6 target:\n${formatConfigIssues("template", templateInspection)}`);
+    throw new Error(`Template is not compatible with the targeted Codex release:\n${formatConfigIssues("template", templateInspection)}`);
   }
 
   const migrationPlan =
@@ -197,7 +197,7 @@ async function buildConfigPlan(
     requireModel: true,
   });
   if (!finalInspection.valid) {
-    throw new Error(`Result is not compatible with the GPT-5.6 target:\n${formatConfigIssues("result", finalInspection)}`);
+    throw new Error(`Result is not compatible with the targeted Codex release:\n${formatConfigIssues("result", finalInspection)}`);
   }
   return plan;
 }

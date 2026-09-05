@@ -4,7 +4,61 @@ import { describe, expect, test } from "vitest";
 import { CODEX_TARGET, inspectCodexConfig } from "../src/codex-policy.js";
 
 describe("inspectCodexConfig", () => {
-  test("accepts the bundled GPT-5.6 template", async () => {
+  test.each(["low", "medium", "high", "xhigh", "max", "ultra"])(
+    "accepts Astra reasoning effort %s and the fast service alias",
+    async (effort) => {
+      await expect(inspectCodexConfig(
+        `model = "gpt-6-astra"\nmodel_reasoning_effort = "${effort}"\nservice_tier = "fast"\n`,
+        "target",
+        { requireModel: true },
+      )).resolves.toEqual({ valid: true, clean: true, issues: [] });
+    },
+  );
+
+  test("rejects Ultrafast for Astra while preserving Sol support", async () => {
+    const inspection = await inspectCodexConfig(
+      'model = "gpt-6-astra"\nservice_tier = "ultrafast"\n',
+      "target",
+      { requireModel: true },
+    );
+    expect(inspection.issues).toContainEqual(expect.objectContaining({
+      code: "unsupported_service_tier", path: "service_tier",
+    }));
+  });
+
+  test("accepts Codex 0.153 app accounts, context management, and TUI settings", async () => {
+    await expect(inspectCodexConfig(`model = "gpt-6-astra"
+[apps.docs.links.work]
+approvals_reviewer = "user"
+default_tools_approval_mode = "prompt"
+[features]
+mcp_oauth_refresh_coordination = true
+[features.context_management]
+experimental_mode = false
+[tui]
+auto_recap = false
+disable_paste_burst = true
+[tui.keymap.vim_normal]
+undo = "u"
+redo = "ctrl-r"
+`, "target", { requireModel: true })).resolves.toEqual({
+      valid: true, clean: true, issues: [],
+    });
+  });
+
+  test("reports the supported legacy paste-burst fallback as a warning", async () => {
+    const inspection = await inspectCodexConfig(
+      'model = "gpt-6-astra"\ndisable_paste_burst = false\n',
+      "target",
+      { requireModel: true },
+    );
+    expect(inspection.valid).toBe(true);
+    expect(inspection.issues).toEqual([expect.objectContaining({
+      severity: "warning", code: "runtime_config_alias", path: "disable_paste_burst",
+    })]);
+  });
+
+  test("accepts the bundled Astra template", async () => {
     const template = await readFile("config.toml.template", "utf8");
 
     await expect(
@@ -21,14 +75,14 @@ describe("inspectCodexConfig", () => {
     expect(template.features).not.toHaveProperty("multi_agent");
   });
 
-  test("requests the expanded GPT-5.6 Sol context window", async () => {
+  test("requests the expanded GPT-6 Astra context window", async () => {
     const template = parse(await readFile("config.toml.template", "utf8")) as {
       model?: unknown;
       model_context_window?: unknown;
       model_auto_compact_token_limit?: unknown;
     };
 
-    expect(template.model).toBe("gpt-5.6-sol");
+    expect(template.model).toBe("gpt-6-astra");
     expect(template.model_context_window).toBe(1_000_000);
     expect(template.model_auto_compact_token_limit).toBe(900_000);
   });
@@ -278,7 +332,6 @@ motion_jump_top = "g g"
 enabled = true
 
 [features]
-local_thread_store_shared_compression = false
 omit_app_server_notification_media = true
 powershell_shell_version = true
 
@@ -305,7 +358,7 @@ previous = "shift-n"
     expect(inspection).toEqual({ valid: true, clean: true, issues: [] });
   });
 
-  test("rejects models outside the GPT-5.6 family", async () => {
+  test("rejects models outside the supported catalog", async () => {
     const inspection = await inspectCodexConfig('model = "gpt-5.5"\n', "target", {
       requireModel: true,
     });

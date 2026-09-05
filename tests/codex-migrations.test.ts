@@ -7,7 +7,46 @@ import {
 import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 describe("planCodexMigrations", () => {
-  test("migrates the v0.2 defaults to the GPT-5.6 configuration", () => {
+  test.each(["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])(
+    "preserves the supported model %s",
+    (model) => {
+      expect(planCodexMigrations(`model = "${model}"\n`).changed).toBe(false);
+    },
+  );
+
+  test("removes the shared-compression no-op at root and in profiles", () => {
+    const plan = planCodexMigrations(`model = "gpt-6-astra"
+[features]
+local_thread_store_shared_compression = true
+local_thread_store_compression = false
+[profiles.work.features]
+local_thread_store_shared_compression = false
+memories = true
+`);
+    expect(parse(plan.outputText)).toEqual({
+      model: "gpt-6-astra",
+      features: { local_thread_store_compression: false },
+      profiles: { work: { features: { memories: true } } },
+    });
+    expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+  });
+
+  test.each([undefined, false, true])(
+    "moves the paste-burst fallback while preserving canonical value %s",
+    (canonical) => {
+      const plan = planCodexMigrations(`disable_paste_burst = true
+[tui]
+auto_recap = false
+${canonical === undefined ? "" : `disable_paste_burst = ${canonical}`}
+`);
+      expect(parse(plan.outputText)).toEqual({
+        tui: { auto_recap: false, disable_paste_burst: canonical ?? true },
+      });
+      expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+    },
+  );
+
+  test("migrates the v0.2 defaults to the Astra configuration", () => {
     const target = `approval_policy = "never"
 sandbox_mode = "danger-full-access"
 model = "gpt-5.5"
@@ -32,7 +71,7 @@ url = "https://example.test/jina"
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.model).toBe("gpt-5.6-sol");
+    expect(parsed.model).toBe("gpt-6-astra");
     expect(parsed.default_permissions).toBe(":danger-full-access");
     expect(parsed).not.toHaveProperty("sandbox_mode");
     expect(parsed).not.toHaveProperty("personality");
@@ -930,28 +969,28 @@ ui = "custom-client-state"
 });
 
 describe("adaptCodexTemplate", () => {
-  const template = `model = "gpt-5.6-sol"
+  const template = `model = "gpt-6-astra"
 model_context_window = 1000000
 model_auto_compact_token_limit = 900000
 default_permissions = ":danger-full-access"
 `;
 
-  test("keeps expanded context defaults for GPT-5.6 Sol", () => {
-    expect(parse(adaptCodexTemplate('model = "gpt-5.6-sol"\n', template))).toEqual(
+  test("keeps expanded context defaults for GPT-6 Astra", () => {
+    expect(parse(adaptCodexTemplate('model = "gpt-6-astra"\n', template))).toEqual(
       parse(template),
     );
     expect(parse(adaptCodexTemplate("", template))).toEqual(parse(template));
   });
 
-  test("keeps Sol context defaults through generic provider routes", () => {
+  test("keeps Astra context defaults through generic provider routes", () => {
     const provider = adaptCodexTemplate(
-      `model = "gpt-5.6-sol"
+      `model = "gpt-6-astra"
 model_provider = "example-gateway"
 `,
       template,
     );
     const baseUrl = adaptCodexTemplate(
-      `model = "gpt-5.6-sol"
+      `model = "gpt-6-astra"
 openai_base_url = "https://gateway.example.test/v1"
 `,
       template,
@@ -961,7 +1000,7 @@ openai_base_url = "https://gateway.example.test/v1"
     expect(parse(baseUrl)).toEqual(parse(template));
   });
 
-  test("does not inject Sol context defaults into alternate or custom models", () => {
+  test("does not inject Astra context defaults into alternate or custom models", () => {
     const terra = parse(adaptCodexTemplate('model = "gpt-5.6-terra"\n', template));
     const custom = parse(
       adaptCodexTemplate(
@@ -973,7 +1012,7 @@ model_provider = "example-gateway"
     );
 
     expect(terra).toEqual({
-      model: "gpt-5.6-sol",
+      model: "gpt-6-astra",
       default_permissions: ":danger-full-access",
     });
     expect(custom).toEqual(terra);
@@ -989,6 +1028,6 @@ writable_roots = ["/workspace/cache"]
       template,
     );
 
-    expect(parse(adapted)).toEqual({ model: "gpt-5.6-sol" });
+    expect(parse(adapted)).toEqual({ model: "gpt-6-astra" });
   });
 });

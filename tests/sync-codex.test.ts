@@ -28,7 +28,7 @@ describe("sync-codex", () => {
       { cwd: projectRoot },
     );
 
-    expect(stdout).toMatch(/^Synced Codex [0-9a-f]{12} with 3 GPT-5\.6 models\.\n$/);
+    expect(stdout).toMatch(/^Synced Codex [0-9a-f]{12} with 4 supported models\.\n$/);
     const generated = await readFile(
       join(projectRoot, "src", "codex-target.generated.ts"),
       "utf8",
@@ -37,6 +37,8 @@ describe("sync-codex", () => {
       generated.slice(generated.indexOf("=") + 1, generated.lastIndexOf(" as const;")),
     ) as {
       sourceRevision: string;
+      defaultModel: string;
+      minimumClientVersion: string;
       models: Array<{ id: string }>;
       tuiKeys: string[];
       configKeyAliases: Array<{
@@ -51,7 +53,10 @@ describe("sync-codex", () => {
       { cwd: sourceRoot },
     );
     expect(target.sourceRevision).toBe(fixtureRevision.trim());
+    expect(target.defaultModel).toBe("gpt-6-astra");
+    expect(target.minimumClientVersion).toBe("0.153.0");
     expect(target.models.map((entry) => entry.id)).toEqual([
+      "gpt-6-astra",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
@@ -83,7 +88,7 @@ async function writeCodexFixture(sourceRoot: string): Promise<void> {
     ],
     [
       "codex-rs/models-manager/models.json",
-      `${JSON.stringify({ models: [model("gpt-5.6-sol"), model("gpt-5.6-terra"), model("gpt-5.6-luna")] }, null, 2)}\n`,
+      `${JSON.stringify({ models: [model("gpt-6-astra"), model("gpt-5.6-sol"), model("gpt-5.6-terra"), model("gpt-5.6-luna")] }, null, 2)}\n`,
     ],
     [
       "codex-rs/features/src/lib.rs",
@@ -140,7 +145,7 @@ function model(slug: string): Record<string, unknown> {
     default_reasoning_summary: "concise",
     support_verbosity: true,
     service_tiers: [{ id: "priority" }],
-    minimal_client_version: "0.144.3",
+    minimal_client_version: slug === "gpt-6-astra" ? "0.153.0" : "0.144.3",
     tool_mode: "default",
     multi_agent_version: null,
     model_messages: {},

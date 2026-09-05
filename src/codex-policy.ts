@@ -95,7 +95,7 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
       severity: "error",
       code: "model_required",
       path: "model",
-      message: `A GPT-5.6 model is required; use ${CODEX_TARGET.defaultModel}.`,
+      message: `A supported Codex model is required; use ${CODEX_TARGET.defaultModel}.`,
     });
   } else if (
     usesOpenAIModelCatalog &&
@@ -147,7 +147,7 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
       severity: "warning",
       code: "unsupported_personality",
       path: "personality",
-      message: "This GPT-5.6 model does not provide selectable friendly or pragmatic personality instructions.",
+      message: "This model does not provide selectable friendly or pragmatic personality instructions.",
     });
   }
 
@@ -241,6 +241,14 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
 }
 
 function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown): void {
+  if (hasPath(parsed, ["disable_paste_burst"])) {
+    issues.push({
+      severity: "warning",
+      code: "runtime_config_alias",
+      path: "disable_paste_burst",
+      message: "Use tui.disable_paste_burst instead.",
+    });
+  }
   const scopes: string[][] = [[]];
   const profiles = getPath(parsed, ["profiles"]);
   if (isRecord(profiles)) {

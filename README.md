@@ -37,6 +37,8 @@ bunx codex-config@latest apply
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
+This version targets Codex **0.153.4**, with **GPT-6 Astra** as the bundled default and continued support for Sol, Terra, and Luna. Astra requires Codex 0.153.0 or later. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
+
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
 ## The curated profile
@@ -45,8 +47,8 @@ The bundled profile is an opinionated setup for trusted local development:
 
 | Setting | What you get |
 | --- | --- |
-| `gpt-5.6-sol` | The default model for the targeted Codex release |
-| Expanded Sol context | Requests a 1,000,000-token window and compaction around 900,000 tokens |
+| `gpt-6-astra` | The default model for the targeted Codex release |
+| Expanded Astra context | Requests a 1,000,000-token window and compaction around 900,000 tokens |
 | High reasoning effort | More reasoning for coding and planning tasks |
 | Live web search | Current information when a task needs it |
 | Fast service tier | Priority processing when available |
@@ -56,7 +58,7 @@ The bundled profile is an opinionated setup for trusted local development:
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 
-Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-5.6-sol` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
+Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-6-astra` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
 
 > [!WARNING]
 > The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.

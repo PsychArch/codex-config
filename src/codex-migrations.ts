@@ -146,6 +146,13 @@ export function planCodexMigrations(
   }
 
   migrateLegacyUi(parsed, migrationValues, removalPaths);
+  migrateKey(
+    parsed,
+    migrationValues,
+    removalPaths,
+    ["disable_paste_burst"],
+    ["tui", "disable_paste_burst"],
+  );
   migrateTuiAliases(parsed, migrationValues);
 
   for (const key of RETIRED_ROOT_KEYS) {

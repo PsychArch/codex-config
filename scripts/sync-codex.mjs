@@ -44,9 +44,9 @@ const [schemaJson, modelsJson, featuresRust, legacyFeaturesRust, keyAliasesRust]
   readFile(keyAliasesSource, "utf8"),
 ]);
 
-const expectedModelIds = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
+const expectedModelIds = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 const models = modelsJson.models
-  .filter((model) => /^gpt-5\.6-(sol|terra|luna)$/.test(model.slug))
+  .filter((model) => expectedModelIds.includes(model.slug))
   .map((model) => ({
     id: model.slug,
     displayName: model.display_name,
@@ -63,9 +63,9 @@ const models = modelsJson.models
   }))
   .sort((left, right) => expectedModelIds.indexOf(left.id) - expectedModelIds.indexOf(right.id));
 
-const defaultModel = "gpt-5.6-sol";
+const defaultModel = "gpt-6-astra";
 if (JSON.stringify(models.map((model) => model.id)) !== JSON.stringify(expectedModelIds)) {
-  throw new Error(`Expected the complete GPT-5.6 model family in ${modelsSource}`);
+  throw new Error(`Expected all supported Codex models in ${modelsSource}`);
 }
 
 const minimumClientVersion = maxVersion(models.map((model) => model.minimumClientVersion));
@@ -120,7 +120,7 @@ await Promise.all([
 ]);
 
 process.stdout.write(
-  `Synced Codex ${target.sourceRevision.slice(0, 12)} with ${models.length} GPT-5.6 models.\n`,
+  `Synced Codex ${target.sourceRevision.slice(0, 12)} with ${models.length} supported models.\n`,
 );
 
 function resolveSourceRoot(args) {

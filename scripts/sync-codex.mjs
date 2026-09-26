@@ -44,13 +44,14 @@ const [schemaJson, modelsJson, featuresRust, legacyFeaturesRust, keyAliasesRust]
   readFile(keyAliasesSource, "utf8"),
 ]);
 
-const expectedModelIds = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
+const expectedModelIds = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 const models = modelsJson.models
   .filter((model) => expectedModelIds.includes(model.slug))
   .map((model) => ({
     id: model.slug,
     displayName: model.display_name,
     contextWindow: model.context_window,
+    maxContextWindow: model.max_context_window,
     reasoningEfforts: model.supported_reasoning_levels.map((entry) => entry.effort),
     defaultReasoningEffort: model.default_reasoning_level,
     defaultReasoningSummary: model.default_reasoning_summary,
@@ -228,6 +229,15 @@ function parseConfigKeyAliases(source) {
     .map((chunk) => chunk.split("}", 1)[0]);
   const entries = blocks
     .flatMap((block) => {
+      const pathValue = (key) => {
+        const value = block.match(new RegExp(`\\b${key}:\\s*&\\[([^\\]]*)\\]`))?.[1];
+        return value === undefined ? undefined : [...value.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+      };
+      const legacyPath = pathValue("legacy");
+      const canonicalPath = pathValue("canonical");
+      if (legacyPath?.length && canonicalPath?.length) {
+        return [{ legacyPath, canonicalPath }];
+      }
       const tablePathSource = block.match(/\btable_path:\s*&\[([^\]]*)\]/)?.[1];
       const legacyKey = block.match(/\blegacy_key:\s*"([^"]+)"/)?.[1];
       const canonicalKey = block.match(/\bcanonical_key:\s*"([^"]+)"/)?.[1];
@@ -235,14 +245,14 @@ function parseConfigKeyAliases(source) {
         return [];
       }
       const tablePath = [...tablePathSource.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-      return [{ tablePath, legacyKey, canonicalKey }];
+      return [{ legacyPath: [...tablePath, legacyKey], canonicalPath: [...tablePath, canonicalKey] }];
     });
   if (entries.length !== blocks.length) {
     throw new Error(`Could not parse config key aliases in ${keyAliasesSource}`);
   }
   return entries.sort((left, right) =>
-    [...left.tablePath, left.legacyKey].join(".").localeCompare(
-      [...right.tablePath, right.legacyKey].join("."),
+    left.legacyPath.join(".").localeCompare(
+      right.legacyPath.join("."),
     ),
   );
 }

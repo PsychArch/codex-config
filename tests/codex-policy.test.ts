@@ -15,7 +15,7 @@ describe("inspectCodexConfig", () => {
     },
   );
 
-  test("rejects Ultrafast for Astra while preserving Sol support", async () => {
+  test("rejects Ultrafast for Astra", async () => {
     const inspection = await inspectCodexConfig(
       'model = "gpt-6-astra"\nservice_tier = "ultrafast"\n',
       "target",
@@ -272,12 +272,10 @@ bedrock_setup_wizard = true
 code_mode_prewarm = true
 compaction_image_budget = true
 content_item_kinds = true
-guardian_ext = true
 in_app_local_automation = true
 shell_snapshot_v2 = true
 skip_host_skill_discovery = true
 step_model_switching = true
-transcript_v2 = true
 write_stdin_approval = true
 
 [features.guardianv2]
@@ -494,7 +492,9 @@ wire_api = "responses"
       expect.objectContaining({ code: "unsupported_service_tier", path: "service_tier" }),
     );
     expect(fast.valid).toBe(true);
-    expect(ultrafastSol.valid).toBe(true);
+    expect(ultrafastSol.issues).toContainEqual(
+      expect.objectContaining({ code: "unsupported_service_tier", path: "service_tier" }),
+    );
     expect(ultrafastTerra.issues).toContainEqual(
       expect.objectContaining({ code: "unsupported_service_tier", path: "service_tier" }),
     );

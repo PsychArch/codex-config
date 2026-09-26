@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 
 const execFileAsync = promisify(execFile);
 
-describe("cli", () => {
+describe("cli", { timeout: 30_000 }, () => {
   test("--version matches the package manifest", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       version: string;

@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 const execFileAsync = promisify(execFile);
 
 describe("sync-codex", () => {
-  test("parses alias values without treating the Rust struct declaration as one", async () => {
+  test.each(["legacy", "paths"])("parses %s alias values without treating the Rust struct declaration as one", async (format) => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-sync-"));
     const projectRoot = join(directory, "project");
     const sourceRoot = join(directory, "codex-source");
@@ -19,7 +19,7 @@ describe("sync-codex", () => {
       mkdir(join(projectRoot, "src"), { recursive: true }),
     ]);
     await copyFile(join(process.cwd(), "scripts", "sync-codex.mjs"), scriptPath);
-    await writeCodexFixture(sourceRoot);
+    await writeCodexFixture(sourceRoot, format);
     await initializeGitRepository(sourceRoot);
 
     const { stdout } = await execFileAsync(
@@ -28,7 +28,7 @@ describe("sync-codex", () => {
       { cwd: projectRoot },
     );
 
-    expect(stdout).toMatch(/^Synced Codex [0-9a-f]{12} with 4 supported models\.\n$/);
+    expect(stdout).toMatch(/^Synced Codex [0-9a-f]{12} with 6 supported models\.\n$/);
     const generated = await readFile(
       join(projectRoot, "src", "codex-target.generated.ts"),
       "utf8",
@@ -42,9 +42,8 @@ describe("sync-codex", () => {
       models: Array<{ id: string }>;
       tuiKeys: string[];
       configKeyAliases: Array<{
-        tablePath: string[];
-        legacyKey: string;
-        canonicalKey: string;
+        legacyPath: string[];
+        canonicalPath: string[];
       }>;
     };
     const { stdout: fixtureRevision } = await execFileAsync(
@@ -54,9 +53,11 @@ describe("sync-codex", () => {
     );
     expect(target.sourceRevision).toBe(fixtureRevision.trim());
     expect(target.defaultModel).toBe("gpt-6-astra");
-    expect(target.minimumClientVersion).toBe("0.153.0");
+    expect(target.minimumClientVersion).toBe("0.155.0");
     expect(target.models.map((entry) => entry.id)).toEqual([
       "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
       "gpt-5.6-sol",
       "gpt-5.6-terra",
       "gpt-5.6-luna",
@@ -64,15 +65,14 @@ describe("sync-codex", () => {
     expect(target.tuiKeys).toEqual(["notifications"]);
     expect(target.configKeyAliases).toEqual([
       {
-        tablePath: ["agents"],
-        legacyKey: "max_threads",
-        canonicalKey: "max_concurrent_threads_per_session",
+        legacyPath: ["agents", "max_threads"],
+        canonicalPath: ["agents", "max_concurrent_threads_per_session"],
       },
       {
-        tablePath: ["memories"],
-        legacyKey: "no_memories_if_mcp_or_web_search",
-        canonicalKey: "disable_on_external_context",
+        legacyPath: ["memories", "no_memories_if_mcp_or_web_search"],
+        canonicalPath: ["memories", "disable_on_external_context"],
       },
+      ...(format === "paths" ? [{ legacyPath: ["tui", "whimsy"], canonicalPath: ["tui", "effects", "starfield"] }] : []),
     ]);
     await expect(readFile(join(projectRoot, "config.schema.json"), "utf8")).resolves.toBe(
       await readFile(join(sourceRoot, "codex-rs", "core", "config.schema.json"), "utf8"),
@@ -80,7 +80,7 @@ describe("sync-codex", () => {
   });
 });
 
-async function writeCodexFixture(sourceRoot: string): Promise<void> {
+async function writeCodexFixture(sourceRoot: string, format: string): Promise<void> {
   const files = new Map<string, string>([
     [
       "codex-rs/core/config.schema.json",
@@ -88,7 +88,7 @@ async function writeCodexFixture(sourceRoot: string): Promise<void> {
     ],
     [
       "codex-rs/models-manager/models.json",
-      `${JSON.stringify({ models: [model("gpt-6-astra"), model("gpt-5.6-sol"), model("gpt-5.6-terra"), model("gpt-5.6-luna")] }, null, 2)}\n`,
+      `${JSON.stringify({ models: [model("gpt-6-astra"), model("gpt-6-sol"), model("gpt-6-luna"), model("gpt-5.6-sol"), model("gpt-5.6-terra"), model("gpt-5.6-luna")] }, null, 2)}\n`,
     ],
     [
       "codex-rs/features/src/lib.rs",
@@ -126,6 +126,25 @@ const CONFIG_KEY_ALIASES: &[ConfigKeyAlias] = &[
     ],
   ]);
 
+  if (format === "paths") {
+    files.set("codex-rs/config/src/key_aliases.rs", `
+struct ConfigKeyAlias { legacy: &'static [&'static str], canonical: &'static [&'static str] }
+const CONFIG_KEY_ALIASES: &[ConfigKeyAlias] = &[
+    ConfigKeyAlias {
+        legacy: &["agents", "max_threads"],
+        canonical: &["agents", "max_concurrent_threads_per_session"],
+    },
+    ConfigKeyAlias {
+        legacy: &["memories", "no_memories_if_mcp_or_web_search"],
+        canonical: &["memories", "disable_on_external_context"],
+    },
+    ConfigKeyAlias {
+        legacy: &["tui", "whimsy"],
+        canonical: &["tui", "effects", "starfield"],
+    },
+];
+`);
+  }
   await Promise.all(
     [...files].map(async ([path, contents]) => {
       const destination = join(sourceRoot, path);
@@ -145,7 +164,7 @@ function model(slug: string): Record<string, unknown> {
     default_reasoning_summary: "concise",
     support_verbosity: true,
     service_tiers: [{ id: "priority" }],
-    minimal_client_version: slug === "gpt-6-astra" ? "0.153.0" : "0.144.3",
+    minimal_client_version: slug === "gpt-6-astra" ? "0.153.0" : slug.startsWith("gpt-6-") ? "0.155.0" : "0.144.3",
     tool_mode: "default",
     multi_agent_version: null,
     model_messages: {},

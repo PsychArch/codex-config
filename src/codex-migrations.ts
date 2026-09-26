@@ -68,7 +68,12 @@ const RETIRED_ROOT_KEYS = [
 
 const RETIRED_CONFIG_PATHS = [
   ["agents", "job_max_runtime_seconds"],
+  ["windows", "sandbox_private_desktop"],
 ] as const;
+
+// Preserve the established migration of our old bundled default. An unfamiliar
+// model may be a newly released model or an account-specific alias, not obsolete.
+export const LEGACY_DEFAULT_MODELS: readonly string[] = ["gpt-5.5"];
 
 const RETIRED_UI_KEYS = new Set(["show_plan"]);
 
@@ -91,18 +96,19 @@ export function planCodexMigrations(
   const parsed = parseTarget(targetText);
   const migrationValues: Record<string, unknown> = {};
   const removalPaths: string[][] = [];
-  const supportedModels = new Set<string>(CODEX_TARGET.models.map((model) => model.id));
   const usesOpenAIModelCatalog = usesManagedOpenAIModelCatalog(parsed);
 
   if (usesOpenAIModelCatalog && hasPath(parsed, ["model"])) {
     const model = getPath(parsed, ["model"]);
-    if (typeof model !== "string" || !supportedModels.has(model)) {
+    if (typeof model === "string" && LEGACY_DEFAULT_MODELS.includes(model)) {
       setMigrationValue(migrationValues, ["model"], CODEX_TARGET.defaultModel);
     }
   }
 
   if (
     usesOpenAIModelCatalog &&
+    (CODEX_TARGET.models.some((model) => model.id === getPath(parsed, ["model"])) ||
+      LEGACY_DEFAULT_MODELS.includes(getPath(parsed, ["model"]) as string)) &&
     hasPath(parsed, ["personality"]) &&
     getPath(parsed, ["personality"]) !== "none"
   ) {
@@ -125,10 +131,18 @@ export function planCodexMigrations(
       parsed,
       migrationValues,
       removalPaths,
-      [...alias.tablePath, alias.legacyKey],
-      [...alias.tablePath, alias.canonicalKey],
+      [...alias.legacyPath],
+      [...alias.canonicalPath],
     );
   }
+  migrateKey(
+    parsed, migrationValues, removalPaths,
+    ["orchestrator", "skills", "enabled"], ["cloud", "skills", "enabled"],
+  );
+  migrateKey(
+    parsed, migrationValues, removalPaths,
+    ["features", "transcript_v2"], ["tui", "fullscreen_transcript"],
+  );
   for (const [legacyKey, canonicalKey] of Object.entries(GHOST_SNAPSHOT_KEY_ALIASES)) {
     migrateKey(
       parsed,
@@ -409,6 +423,20 @@ function migrateFeatureFlags(
   scope: string[],
 ): void {
   const scoped = (...path: string[]): string[] => [...scope, ...path];
+  const legacyThreadContext = scoped("features", "guardian_thread_context");
+  if (hasPath(parsed, legacyThreadContext)) {
+    const guardian = getPath(parsed, scoped("features", "guardianv2"));
+    if (typeof guardian === "boolean") {
+      setMigrationValue(migrationValues, scoped("features", "guardianv2"), {
+        enabled: guardian,
+        thread_context: getPath(parsed, legacyThreadContext),
+      });
+      removalPaths.push(legacyThreadContext);
+    } else {
+      migrateKey(parsed, migrationValues, removalPaths, legacyThreadContext,
+        scoped("features", "guardianv2", "thread_context"));
+    }
+  }
   for (const [alias, canonical] of Object.entries(CODEX_TARGET.legacyFeatureAliases)) {
     const aliasPath = scoped("features", alias);
     if (!hasPath(parsed, aliasPath)) {
@@ -445,9 +473,11 @@ function migrateFeatureFlags(
     ...CODEX_TARGET.removedFeatureKeys,
     ...CODEX_TARGET.retiredFeatureKeys,
   ]) {
-    const path = scoped("features", key);
-    if (hasPath(parsed, path)) {
-      removalPaths.push(path);
+    // A catalog entry can name a nested setting; also recognize quoted keys.
+    for (const path of [scoped("features", ...key.split(".")), scoped("features", key)]) {
+      if (hasPath(parsed, path)) {
+        removalPaths.push(path);
+      }
     }
   }
 }

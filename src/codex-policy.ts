@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv/dist/ajv.js";
 import { parse } from "smol-toml";
-import { STATUS_LINE_LEGACY_IDS, TERMINAL_TITLE_LEGACY_IDS } from "./codex-migrations.js";
+import { LEGACY_DEFAULT_MODELS, STATUS_LINE_LEGACY_IDS, TERMINAL_TITLE_LEGACY_IDS } from "./codex-migrations.js";
+import { gatewayOAuthIssues } from "./gateway-oauth-policy.js";
 import { CODEX_TARGET } from "./codex-target.generated.js";
 import { defaultSchemaPath } from "./paths.js";
 
@@ -103,10 +105,12 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
     !model
   ) {
     issues.push({
-      severity: "error",
-      code: "unsupported_model",
+      severity: LEGACY_DEFAULT_MODELS.includes(modelValue) ? "error" : "warning",
+      code: LEGACY_DEFAULT_MODELS.includes(modelValue) ? "unsupported_model" : "unverified_model",
       path: "model",
-      message: `Only ${CODEX_TARGET.models.map((candidate) => candidate.id).join(", ")} are supported.`,
+      message: LEGACY_DEFAULT_MODELS.includes(modelValue)
+        ? `This legacy bundled model migrates to ${CODEX_TARGET.defaultModel}.`
+        : "This model is not in the bundled catalog. It will be preserved, but its capabilities cannot be verified.",
     });
   }
 
@@ -139,6 +143,7 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
 
   if (
     usesOpenAIModelCatalog &&
+    (model !== undefined || (typeof modelValue === "string" && LEGACY_DEFAULT_MODELS.includes(modelValue))) &&
     hasPath(parsed, ["personality"]) &&
     getPath(parsed, ["personality"]) !== "none" &&
     !model?.supportsPersonality
@@ -199,7 +204,7 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
   }
 
   for (const key of CODEX_TARGET.removedFeatureKeys) {
-    if (hasPath(parsed, ["features", key])) {
+    if (hasPath(parsed, ["features", ...key.split(".")]) || hasPath(parsed, ["features", key])) {
       issues.push({
         severity: "warning",
         code: "removed_feature",
@@ -241,6 +246,16 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
 }
 
 function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown): void {
+  const aliases: Array<{ legacyPath: readonly string[]; canonicalPath: readonly string[] }> = [
+    ...CODEX_TARGET.configKeyAliases,
+    { legacyPath: ["orchestrator", "skills", "enabled"], canonicalPath: ["cloud", "skills", "enabled"] },
+  ];
+  for (const { legacyPath, canonicalPath } of aliases) {
+    if (hasPath(parsed, [...legacyPath])) {
+      issues.push({ severity: "warning", code: "runtime_config_alias", path: legacyPath.join("."),
+        message: `Use ${canonicalPath.join(".")} instead.` });
+    }
+  }
   if (hasPath(parsed, ["disable_paste_burst"])) {
     issues.push({
       severity: "warning",
@@ -277,11 +292,6 @@ function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown
     }
   }
   for (const [table, legacyKey, canonicalKey] of [
-    [
-      "memories",
-      "no_memories_if_mcp_or_web_search",
-      "disable_on_external_context",
-    ],
     [
       "ghost_snapshot",
       "ignore_untracked_files_over_bytes",
@@ -452,6 +462,7 @@ function addNumericFormats(ajv: Ajv): void {
     validate: (value: number) =>
       Number.isInteger(value) && value >= minimum && value <= maximum,
   });
+  ajv.addFormat("uint8", integer(0, 255));
   ajv.addFormat("uint16", integer(0, 65_535));
   ajv.addFormat("uint32", integer(0, 4_294_967_295));
   ajv.addFormat("uint", integer(0, maximumTomlInteger));
@@ -518,6 +529,10 @@ function mcpServerIssues(parsed: unknown): ConfigIssue[] {
       continue;
     }
     const basePath = `mcp_servers.${formatPathSegment(name)}`;
+    if (isRecord(value.oauth) && value.oauth.authorization_server_issuer !== undefined && value.auth !== "ema_auth") {
+      issues.push(runtimeIssue("mcp_invalid_oauth_issuer", `${basePath}.oauth.authorization_server_issuer`,
+        'oauth.authorization_server_issuer requires auth = "ema_auth".'));
+    }
     const hasCommand = typeof value.command === "string";
     const hasUrl = typeof value.url === "string";
     if (!hasCommand && !hasUrl) {
@@ -611,6 +626,7 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
     if (!isRecord(value)) {
       continue;
     }
+    issues.push(...gatewayOAuthIssues(value, basePath, bedrockProviders.has(name)));
     if (bedrockProviders.has(name)) {
       for (const [field, fieldValue] of Object.entries(value)) {
         const isDefaultField =
@@ -627,7 +643,7 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
             runtimeIssue(
               "amazon_bedrock_override",
               `${basePath}.${field}`,
-              `${name} only supports overriding base_url, auth, http_headers, aws.profile, aws.region, and aws.auth_refresh.`,
+              `${name} only supports overriding base_url, auth, http_headers, aws.profile, aws.region, aws.credential_export, and aws.auth_refresh.`,
             ),
           );
         }
@@ -691,6 +707,20 @@ function appendAwsAuthIssues(
   }
 
   const authRefresh = aws.auth_refresh;
+  const credentialExport = aws.credential_export;
+  if (isRecord(credentialExport)) {
+    if (aws.profile !== undefined) {
+      issues.push(runtimeIssue("model_provider_aws_export_conflict", `${basePath}.aws.credential_export`,
+        "AWS credential export cannot be combined with aws.profile."));
+    }
+    const command = credentialExport.command;
+    if (typeof command !== "string" || command.trim() === "" ||
+      (!isAbsolute(command) && (command.includes("/") || command === "." || command === ".." ||
+        (process.platform === "win32" && /[\\:]/.test(command))))) {
+      issues.push(runtimeIssue("model_provider_aws_export_command", `${basePath}.aws.credential_export.command`,
+        "AWS credential export requires an absolute path or a bare executable name."));
+    }
+  }
   if (isRecord(authRefresh) && authRefresh.command !== "aws") {
     issues.push(
       runtimeIssue(

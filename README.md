@@ -37,7 +37,7 @@ bunx codex-config@latest apply
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This version targets Codex **0.153.4**, with **GPT-6 Astra** as the bundled default and continued support for Sol, Terra, and Luna. Astra requires Codex 0.153.0 or later. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
+This version targets Codex **0.157.0**, with **GPT-6 Astra** as the bundled default and support for GPT-6 Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra requires 0.153.0. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -76,8 +76,9 @@ You can also supply your own recommendations with `--template /path/to/template.
 Compatibility migrations are intentionally more selective than replacing the whole file. `codex-config`:
 
 - migrates legacy sandbox permissions, approval policies, feature aliases, config-key aliases, web-search flags, memory settings, and terminal display identifiers;
+- moves `orchestrator.skills.enabled` to `cloud.skills.enabled` and `features.transcript_v2` to `tui.fullscreen_transcript`, preserving canonical settings;
 - removes settings and feature flags that the targeted Codex release no longer uses;
-- moves unsupported OpenAI model selections to the current default;
+- migrates the former bundled GPT-5.5 default to Astra, while preserving unfamiliar model IDs and reporting their capabilities as unverified;
 - preserves supported model choices, custom provider models, customized workspace sandboxes, MCP servers, projects, providers, notices, and unrelated settings;
 - validates the final result before writing it.
 
@@ -99,6 +100,10 @@ pn --silent dlx codex-config@latest doctor
 ```
 
 All commands support `--json` for machine-readable output.
+
+Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, and MCP authorization-server issuer requirements. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled Astra model.
+
+The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex 0.157's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template.
 
 ## Profiles and custom paths
 

@@ -188,7 +188,7 @@ personality = "friendly"
     });
   });
 
-  test("removes every feature key retired from Codex source history", () => {
+  test("removes historical feature keys while retaining their supported replacements", () => {
     expect(CODEX_TARGET.retiredFeatureKeys).toEqual(
       expect.arrayContaining([
         "parallel",
@@ -209,12 +209,10 @@ ${CODEX_TARGET.retiredFeatureKeys.map((key) => `${key} = true`).join("\n")}
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.features).toEqual({});
-    expect(plan.operations).toEqual(
-      CODEX_TARGET.retiredFeatureKeys.map((key) => ({
-        action: "remove",
-        path: `features.${key}`,
-      })),
+    expect(parsed.features).toEqual({ guardianv2: { thread_context: true } });
+    expect(plan.operations.filter((operation) => operation.action === "remove")
+      .map((operation) => operation.path).sort()).toEqual(
+      CODEX_TARGET.retiredFeatureKeys.map((key) => `features.${key}`).sort(),
     );
     expect(second.changed).toBe(false);
   });

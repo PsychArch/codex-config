@@ -44,9 +44,18 @@ const [schemaJson, modelsJson, featuresRust, legacyFeaturesRust, keyAliasesRust]
   readFile(keyAliasesSource, "utf8"),
 ]);
 
-const expectedModelIds = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
-const models = modelsJson.models
-  .filter((model) => expectedModelIds.includes(model.slug))
+// Keep the curated GPT-6 / GPT-5.6 families, including minor model releases.
+// Upstream selects the first visible model after a stable priority sort.
+const visibleModels = modelsJson.models
+  .filter((model) => model.visibility === "list" && model.supported_in_api)
+  .sort((left, right) => left.priority - right.priority);
+const supportedModels = visibleModels
+  .filter((model) => /^gpt-(?:6(?:\.\d+)?|5\.6)-/.test(model.slug));
+const defaultModel = visibleModels[0]?.slug;
+if (!defaultModel || !supportedModels.some((model) => model.slug === defaultModel)) {
+  throw new Error(`The upstream default model is outside the supported catalog in ${modelsSource}`);
+}
+const models = supportedModels
   .map((model) => ({
     id: model.slug,
     displayName: model.display_name,
@@ -61,13 +70,7 @@ const models = modelsJson.models
     toolMode: model.tool_mode,
     multiAgentVersion: model.multi_agent_version,
     supportsPersonality: supportsPersonality(model.model_messages),
-  }))
-  .sort((left, right) => expectedModelIds.indexOf(left.id) - expectedModelIds.indexOf(right.id));
-
-const defaultModel = "gpt-6-astra";
-if (JSON.stringify(models.map((model) => model.id)) !== JSON.stringify(expectedModelIds)) {
-  throw new Error(`Expected all supported Codex models in ${modelsSource}`);
-}
+  }));
 
 const minimumClientVersion = maxVersion(models.map((model) => model.minimumClientVersion));
 

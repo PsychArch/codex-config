@@ -75,7 +75,8 @@ const RETIRED_CONFIG_PATHS = [
 // model may be a newly released model or an account-specific alias, not obsolete.
 export const LEGACY_DEFAULT_MODELS: readonly string[] = ["gpt-5.5"];
 
-const RETIRED_UI_KEYS = new Set(["show_plan"]);
+export const RETIRED_TUI_KEYS = ["prompt_suggestions"] as const;
+const RETIRED_UI_KEYS = new Set<string>(["show_plan", ...RETIRED_TUI_KEYS]);
 
 const DEPRECATED_JS_REPL_KEYS = [
   "js_repl_node_path",
@@ -327,6 +328,11 @@ function migrateScopedConfig(
   migrateWebSearch(parsed, migrationValues, removalPaths, scope);
   migrateFeatureFlags(parsed, migrationValues, removalPaths, scope);
 
+  for (const key of RETIRED_TUI_KEYS) {
+    if (hasPath(parsed, scoped("tui", key))) {
+      removalPaths.push(scoped("tui", key));
+    }
+  }
   for (const key of DEPRECATED_JS_REPL_KEYS) {
     if (hasPath(parsed, scoped(key))) {
       removalPaths.push(scoped(key));

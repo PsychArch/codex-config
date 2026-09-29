@@ -6,12 +6,94 @@ import { describe, expect, test } from "vitest";
 import { applyConfig, doctor } from "../src/commands.js";
 import { planCodexMigrations } from "../src/codex-migrations.js";
 import { inspectCodexConfig } from "../src/codex-policy.js";
+import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
-describe("Codex 0.158 compatibility", () => {
-  test.each(["gpt-6-sol", "gpt-6-luna"])("preserves %s through apply and doctor", async (model) => {
-    const target = join(await mkdtemp(join(tmpdir(), "codex-158-")), "work.config.toml");
+describe("Codex 0.159.1 compatibility", () => {
+  test("pins the stable release catalog and all GPT-6.1 Sol capabilities", () => {
+    expect(CODEX_TARGET.sourceRevision).toBe("8e68a98ef03cdde76d2e6800791ebdf1b3b95b24");
+    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
+    expect(CODEX_TARGET.models.map(({ id }) => id)).toEqual([
+      "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+    ]);
+    expect(CODEX_TARGET.models[0]).toMatchObject({
+      id: "gpt-6.1-sol", contextWindow: 272000, maxContextWindow: 872000,
+      reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+      defaultReasoningEffort: "low", defaultReasoningSummary: "none",
+      supportsVerbosity: true, serviceTiers: ["priority"],
+      minimumClientVersion: "0.153.0", toolMode: "code_mode_only",
+      multiAgentVersion: "v2", supportsPersonality: false,
+    });
+  });
+
+  test.each(["low", "medium", "high", "xhigh", "max", "ultra"])("accepts GPT-6.1 Sol effort %s", async (effort) => {
+    expect(await inspect(`model = "gpt-6.1-sol"\nmodel_reasoning_effort = "${effort}"\nplan_mode_reasoning_effort = "${effort}"\nservice_tier = "fast"\n`))
+      .toEqual({ valid: true, clean: true, issues: [] });
+  });
+
+  test("rejects unsupported GPT-6.1 Sol efforts and service tiers", async () => {
+    expect((await inspect('model = "gpt-6.1-sol"\nmodel_reasoning_effort = "persistent"\n')).issues)
+      .toContainEqual(expect.objectContaining({ code: "unsupported_reasoning_effort" }));
+    expect((await inspect('model = "gpt-6.1-sol"\nservice_tier = "ultrafast"\n')).issues)
+      .toContainEqual(expect.objectContaining({ code: "unsupported_service_tier" }));
+  });
+
+  test.each([false, true])("accepts and preserves instant_interrupt=%s without enabling it by default", async (enabled) => {
+    const config = `model = "gpt-6.1-sol"\n[features]\ninstant_interrupt = ${enabled}\n`;
+    expect(await inspect(config)).toEqual({ valid: true, clean: true, issues: [] });
+    expect(planCodexMigrations(config).outputText).toBe(config);
+    expect(parse(await readFile("config.toml.template", "utf8")).features).not.toHaveProperty("instant_interrupt");
+    expect((await inspect('model = "gpt-6.1-sol"\n[features]\ninstant_interrupt = "yes"\n')).valid).toBe(false);
+  });
+
+  test.each(["default", "strict"])("accepts and preserves circuit_break_action=%s", async (action) => {
+    const config = `model = "gpt-6.1-sol"\n[auto_review]\ncircuit_break_action = "${action}"\n`;
+    expect(await inspect(config)).toEqual({ valid: true, clean: true, issues: [] });
+    expect(planCodexMigrations(config).outputText).toBe(config);
+    expect(parse(await readFile("config.toml.template", "utf8"))).not.toHaveProperty("auto_review");
+    expect((await inspect('model = "gpt-6.1-sol"\n[auto_review]\ncircuit_break_action = "interrupt"\n')).valid).toBe(false);
+  });
+
+  test.each([false, true])("reports and removes prompt_suggestions=%s in root and profile TUI", async (value) => {
+    const config = `model = "gpt-6.1-sol"\n[tui]\nprompt_suggestions = ${value}\ncopy_on_select = "never"\n[profiles.work.tui]\nprompt_suggestions = ${value}\nsession_picker_view = "dense"\n`;
+    const before = await inspect(config);
+    expect(before.valid).toBe(true);
+    expect(before.clean).toBe(false);
+    expect(before.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "removed_config_key", path: "tui.prompt_suggestions" }),
+      expect.objectContaining({ code: "removed_config_key", path: "profiles.work.tui.prompt_suggestions" }),
+    ]));
+    const plan = planCodexMigrations(config);
+    expect(parse(plan.outputText)).toMatchObject({
+      tui: { copy_on_select: "never" }, profiles: { work: { tui: { session_picker_view: "dense" } } },
+    });
+    expect(plan.outputText).not.toContain("prompt_suggestions");
+    expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+    expect((await inspect(plan.outputText)).issues).not.toContainEqual(expect.objectContaining({ code: "removed_config_key" }));
+  });
+
+  test("cleans the legacy UI prompt suggestion key without removing unrelated state", () => {
+    const plan = planCodexMigrations('model = "gpt-6.1-sol"\n[ui]\nprompt_suggestions = true\ncustom = "keep"\n');
+    expect(parse(plan.outputText).ui).toEqual({ custom: "keep" });
+    expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+  });
+
+  test("apply removes prompt suggestions and stays valid and idempotent", async () => {
+    const target = join(await mkdtemp(join(tmpdir(), "codex-159-")), "config.toml");
+    await writeFile(target, 'model = "gpt-6-astra"\n[tui]\nprompt_suggestions = false\nwhimsy = false\n');
+    await applyConfig({ target });
+    expect(parse(await readFile(target, "utf8"))).toMatchObject({
+      model: "gpt-6-astra", tui: { effects: { starfield: false } },
+    });
+    expect(await readFile(target, "utf8")).not.toContain("prompt_suggestions");
+    expect((await doctor({ target })).ok).toBe(true);
+    expect((await applyConfig({ target })).changed).toBe(false);
+  });
+
+  test.each(["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("preserves %s through apply and doctor", async (model) => {
+    const target = join(await mkdtemp(join(tmpdir(), "codex-159-")), "work.config.toml");
     await writeFile(target, `model = "${model}"
 model_context_window = 600000
 [mcp_servers.docs]
@@ -30,7 +112,7 @@ alternate_screen = "always"
   });
 
   test("preserves an unfamiliar model and reports unverified capabilities", async () => {
-    const target = join(await mkdtemp(join(tmpdir(), "codex-158-")), "config.toml");
+    const target = join(await mkdtemp(join(tmpdir(), "codex-159-")), "config.toml");
     await writeFile(target, 'model = "future-model"\n');
     await applyConfig({ target });
     expect(parse(await readFile(target, "utf8")).model).toBe("future-model");
@@ -39,7 +121,7 @@ alternate_screen = "always"
     }));
     expect((await applyConfig({ target })).changed).toBe(false);
     await applyConfig({ target, force: true });
-    expect(parse(await readFile(target, "utf8")).model).toBe("gpt-6-astra");
+    expect(parse(await readFile(target, "utf8")).model).toBe("gpt-6.1-sol");
   });
 
   test.each([undefined, false, true])("migrates aliases preserving canonical %s", async (canonical) => {

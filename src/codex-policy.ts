@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv/dist/ajv.js";
 import { parse } from "smol-toml";
-import { LEGACY_DEFAULT_MODELS, STATUS_LINE_LEGACY_IDS, TERMINAL_TITLE_LEGACY_IDS } from "./codex-migrations.js";
+import { LEGACY_DEFAULT_MODELS, RETIRED_TUI_KEYS, STATUS_LINE_LEGACY_IDS, TERMINAL_TITLE_LEGACY_IDS } from "./codex-migrations.js";
 import { gatewayOAuthIssues } from "./gateway-oauth-policy.js";
 import { CODEX_TARGET } from "./codex-target.generated.js";
 import { defaultSchemaPath } from "./paths.js";
@@ -270,6 +270,13 @@ function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown
     scopes.push(...Object.keys(profiles).map((name) => ["profiles", name]));
   }
   for (const scope of scopes) {
+    for (const key of RETIRED_TUI_KEYS) {
+      const path = [...scope, "tui", key];
+      if (hasPath(parsed, path)) {
+        issues.push({ severity: "warning", code: "removed_config_key", path: path.join("."),
+          message: "This TUI setting is no longer consumed by Codex and should be removed." });
+      }
+    }
     const toolsWebSearchPath = [...scope, "tools", "web_search"];
     if (typeof getPath(parsed, toolsWebSearchPath) === "boolean") {
       issues.push({
@@ -399,6 +406,13 @@ function isRuntimeCompatibilityProperty(
   property: string,
 ): boolean {
   const value = getPath(parsed, [...tablePath, property]);
+  if (
+    RETIRED_TUI_KEYS.includes(property as never) &&
+    ((tablePath.length === 1 && tablePath[0] === "tui") ||
+      (tablePath.length === 3 && tablePath[0] === "profiles" && tablePath[2] === "tui"))
+  ) {
+    return true;
+  }
   if (
     property === "no_memories_if_mcp_or_web_search" &&
     tablePath.at(-1) === "memories"

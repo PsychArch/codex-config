@@ -37,7 +37,7 @@ bunx codex-config@latest apply
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This version targets Codex **0.158.0**, with **GPT-6 Astra** as the bundled default and support for GPT-6 Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra requires 0.153.0. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
+This version targets Codex **0.159.1**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -47,8 +47,8 @@ The bundled profile is an opinionated setup for trusted local development:
 
 | Setting | What you get |
 | --- | --- |
-| `gpt-6-astra` | The default model for the targeted Codex release |
-| Expanded Astra context | Requests a 1,000,000-token window and compaction around 900,000 tokens |
+| `gpt-6.1-sol` | The default model for the targeted Codex release |
+| Expanded GPT-6.1 Sol context | Requests a 1,000,000-token window and compaction around 900,000 tokens |
 | High reasoning effort | More reasoning for coding and planning tasks |
 | Live web search | Current information when a task needs it |
 | Fast service tier | Priority processing when available |
@@ -58,7 +58,7 @@ The bundled profile is an opinionated setup for trusted local development:
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 
-Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-6-astra` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
+Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-6.1-sol` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
 
 > [!WARNING]
 > The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.
@@ -78,7 +78,7 @@ Compatibility migrations are intentionally more selective than replacing the who
 - migrates legacy sandbox permissions, approval policies, feature aliases, config-key aliases, web-search flags, memory settings, and terminal display identifiers;
 - moves `orchestrator.skills.enabled` to `cloud.skills.enabled` and `features.transcript_v2` to `tui.fullscreen_transcript`, preserving canonical settings;
 - removes settings and feature flags that the targeted Codex release no longer uses;
-- migrates the former bundled GPT-5.5 default to Astra, while preserving unfamiliar model IDs and reporting their capabilities as unverified;
+- migrates the former bundled GPT-5.5 default to GPT-6.1 Sol, while preserving unfamiliar model IDs and reporting their capabilities as unverified;
 - preserves supported model choices, custom provider models, customized workspace sandboxes, MCP servers, projects, providers, notices, and unrelated settings;
 - validates the final result before writing it.
 
@@ -101,9 +101,9 @@ pn --silent dlx codex-config@latest doctor
 
 All commands support `--json` for machine-readable output.
 
-Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, and MCP authorization-server issuer requirements. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled Astra model.
+Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, and MCP authorization-server issuer requirements. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled GPT-6.1 Sol model.
 
-The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex 0.158's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template.
+The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex 0.158's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template. Codex 0.159 adds opt-in `features.instant_interrupt` and `auto_review.circuit_break_action = "strict"`; the template leaves both at their upstream defaults. Removed `tui.prompt_suggestions` settings are cleaned up, including in legacy inline profile tables.
 
 ## Profiles and custom paths
 
@@ -133,4 +133,4 @@ Maintainers can refresh the bundled schema and Codex compatibility metadata from
 pnpm sync:codex -- --source /path/to/codex
 ```
 
-The source checkout must include complete, non-partial first-parent history so retired configuration keys can be detected.
+The source checkout must include complete first-parent history so retired configuration keys can be detected. The sync script discovers visible, API-supported GPT-6 (including minor releases) and GPT-5.6 models, orders them by upstream priority, and derives the default from the upstream picker order. It fails if that default falls outside the curated families.

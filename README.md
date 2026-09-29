@@ -37,7 +37,7 @@ bunx codex-config@latest apply
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This version targets Codex **0.157.0**, with **GPT-6 Astra** as the bundled default and support for GPT-6 Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra requires 0.153.0. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
+This version targets Codex **0.158.0**, with **GPT-6 Astra** as the bundled default and support for GPT-6 Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra requires 0.153.0. Normal apply preserves an existing supported model selection; `--force` adopts the bundled Astra profile.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -103,7 +103,7 @@ All commands support `--json` for machine-readable output.
 
 Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, and MCP authorization-server issuer requirements. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled Astra model.
 
-The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex 0.157's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template.
+The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex 0.158's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template.
 
 ## Profiles and custom paths
 

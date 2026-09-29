@@ -423,20 +423,6 @@ function migrateFeatureFlags(
   scope: string[],
 ): void {
   const scoped = (...path: string[]): string[] => [...scope, ...path];
-  const legacyThreadContext = scoped("features", "guardian_thread_context");
-  if (hasPath(parsed, legacyThreadContext)) {
-    const guardian = getPath(parsed, scoped("features", "guardianv2"));
-    if (typeof guardian === "boolean") {
-      setMigrationValue(migrationValues, scoped("features", "guardianv2"), {
-        enabled: guardian,
-        thread_context: getPath(parsed, legacyThreadContext),
-      });
-      removalPaths.push(legacyThreadContext);
-    } else {
-      migrateKey(parsed, migrationValues, removalPaths, legacyThreadContext,
-        scoped("features", "guardianv2", "thread_context"));
-    }
-  }
   for (const [alias, canonical] of Object.entries(CODEX_TARGET.legacyFeatureAliases)) {
     const aliasPath = scoped("features", alias);
     if (!hasPath(parsed, aliasPath)) {

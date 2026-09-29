@@ -533,6 +533,22 @@ function mcpServerIssues(parsed: unknown): ConfigIssue[] {
       issues.push(runtimeIssue("mcp_invalid_oauth_issuer", `${basePath}.oauth.authorization_server_issuer`,
         'oauth.authorization_server_issuer requires auth = "ema_auth".'));
     }
+    if (isRecord(value.oauth) && value.oauth.client_secret !== undefined) {
+      const secretPath = `${basePath}.oauth.client_secret`;
+      const blank = (field: unknown): boolean => typeof field !== "string" || field.trim() === "";
+      if (typeof value.oauth.client_secret === "string" && value.oauth.client_secret.trim() === "") {
+        issues.push(runtimeIssue("mcp_invalid_oauth_client_secret", secretPath,
+          "oauth.client_secret must not be empty."));
+      }
+      if (blank(value.oauth.client_id)) {
+        issues.push(runtimeIssue("mcp_invalid_oauth_client_secret", secretPath,
+          "oauth.client_secret requires oauth.client_id."));
+      }
+      if (value.auth === "ema_auth") {
+        issues.push(runtimeIssue("mcp_invalid_oauth_client_secret", secretPath,
+          "ema_auth cannot be combined with oauth.client_secret."));
+      }
+    }
     const hasCommand = typeof value.command === "string";
     const hasUrl = typeof value.url === "string";
     if (!hasCommand && !hasUrl) {

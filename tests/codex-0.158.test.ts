@@ -9,9 +9,9 @@ import { inspectCodexConfig } from "../src/codex-policy.js";
 
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
-describe("Codex 0.157 compatibility", () => {
+describe("Codex 0.158 compatibility", () => {
   test.each(["gpt-6-sol", "gpt-6-luna"])("preserves %s through apply and doctor", async (model) => {
-    const target = join(await mkdtemp(join(tmpdir(), "codex-157-")), "work.config.toml");
+    const target = join(await mkdtemp(join(tmpdir(), "codex-158-")), "work.config.toml");
     await writeFile(target, `model = "${model}"
 model_context_window = 600000
 [mcp_servers.docs]
@@ -30,7 +30,7 @@ alternate_screen = "always"
   });
 
   test("preserves an unfamiliar model and reports unverified capabilities", async () => {
-    const target = join(await mkdtemp(join(tmpdir(), "codex-157-")), "config.toml");
+    const target = join(await mkdtemp(join(tmpdir(), "codex-158-")), "config.toml");
     await writeFile(target, 'model = "future-model"\n');
     await applyConfig({ target });
     expect(parse(await readFile(target, "utf8")).model).toBe("future-model");
@@ -73,10 +73,11 @@ thread_context = false
       cloud: { skills: { enabled: canonical ?? false } },
       orchestrator: { mcp: { enabled: false } },
       tui: { fullscreen_transcript: canonical ?? false },
-      features: { guardianv2: { enabled: false, thread_context: false } },
+      features: { guardianv2: { enabled: false } },
       windows: { sandbox: "elevated" },
-      profiles: { work: { features: { guardianv2: { thread_context: false } } } },
     });
+    expect(result.features.guardianv2).not.toHaveProperty("thread_context");
+    expect(result.profiles.work.features.guardianv2).not.toHaveProperty("thread_context");
     expect(result.features).not.toHaveProperty("transcript_v2");
     expect(result.features).not.toHaveProperty("personality");
     expect(result.features).not.toHaveProperty("guardian_ext");
@@ -103,7 +104,7 @@ enabled = false
     ]);
   });
 
-  test("moves the old Guardian context flag while preserving boolean and canonical settings", () => {
+  test("drops the Guardian context flag now that thread context is always on", () => {
     const result = planCodexMigrations(`model = "gpt-6-astra"
 [features]
 guardianv2 = false
@@ -115,8 +116,8 @@ thread_context = false
 `);
     expect(parse(result.outputText)).toEqual({
       model: "gpt-6-astra",
-      features: { guardianv2: { enabled: false, thread_context: false } },
-      profiles: { work: { features: { guardianv2: { thread_context: false } } } },
+      features: { guardianv2: false },
+      profiles: { work: { features: { guardianv2: {} } } },
     });
     expect(planCodexMigrations(result.outputText).changed).toBe(false);
   });
@@ -173,5 +174,38 @@ tables = false
       expect.objectContaining({ code: "model_provider_aws_export_command" }),
       expect.objectContaining({ code: "model_provider_aws_export_conflict" }),
     ]));
+  });
+  test("migrates tui.whimsy to tui.effects.starfield", () => {
+    const plan = planCodexMigrations('model = "gpt-6-astra"\n[tui]\nwhimsy = false\n');
+    expect(parse(plan.outputText)).toMatchObject({ tui: { effects: { starfield: false } } });
+    expect(parse(plan.outputText).tui).not.toHaveProperty("whimsy");
+    expect(planCodexMigrations(plan.outputText).changed).toBe(false);
+  });
+
+  test("accepts the new TUI, MCP, and multi-agent settings", async () => {
+    expect(await inspect(`model = "gpt-6-astra"
+[tui]
+copy_on_select = "never"
+right_click_paste = "off"
+[mcp_servers.docs]
+url = "https://example.test/mcp"
+startup_readiness = "catalog"
+tool_input_schema_max_bytes = 8000
+[mcp_servers.docs.oauth]
+client_id = "client"
+client_secret = "secret"
+`)).toEqual({ valid: true, clean: true, issues: [] });
+  });
+
+  test("validates MCP OAuth client secrets", async () => {
+    const base = 'model = "gpt-6-astra"\n[mcp_servers.docs]\nurl = "https://example.test/mcp"\n';
+    const codes = async (extra: string) =>
+      (await inspect(base + extra)).issues.map(({ code }) => code);
+    expect(await codes('[mcp_servers.docs.oauth]\nclient_id = "c"\nclient_secret = " "\n'))
+      .toContain("mcp_invalid_oauth_client_secret");
+    expect(await codes('[mcp_servers.docs.oauth]\nclient_secret = "s"\n'))
+      .toContain("mcp_invalid_oauth_client_secret");
+    expect(await codes('auth = "ema_auth"\n[mcp_servers.docs.oauth]\nclient_id = "c"\nclient_secret = "s"\n'))
+      .toContain("mcp_invalid_oauth_client_secret");
   });
 });

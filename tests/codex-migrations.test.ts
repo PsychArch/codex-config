@@ -209,7 +209,7 @@ ${CODEX_TARGET.retiredFeatureKeys.map((key) => `${key} = true`).join("\n")}
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.features).toEqual({ guardianv2: { thread_context: true } });
+    expect(parsed.features).toEqual({});
     expect(plan.operations.filter((operation) => operation.action === "remove")
       .map((operation) => operation.path).sort()).toEqual(
       CODEX_TARGET.retiredFeatureKeys.map((key) => `features.${key}`).sort(),

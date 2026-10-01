@@ -8,7 +8,9 @@ import { describe, expect, test } from "vitest";
 const execFileAsync = promisify(execFile);
 
 describe("sync-codex", () => {
-  test.each(["legacy", "paths"])("parses %s alias values without treating the Rust struct declaration as one", async (format) => {
+  test.each([
+    ["legacy", false], ["paths", false], ["legacy", true], ["paths", true],
+  ] as const)("parses %s aliases and discovers the catalog (minor release: %s)", async (format, minorRelease) => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-sync-"));
     const projectRoot = join(directory, "project");
     const sourceRoot = join(directory, "codex-source");
@@ -19,7 +21,7 @@ describe("sync-codex", () => {
       mkdir(join(projectRoot, "src"), { recursive: true }),
     ]);
     await copyFile(join(process.cwd(), "scripts", "sync-codex.mjs"), scriptPath);
-    await writeCodexFixture(sourceRoot, format);
+    await writeCodexFixture(sourceRoot, format, minorRelease);
     await initializeGitRepository(sourceRoot);
 
     const { stdout } = await execFileAsync(
@@ -28,7 +30,7 @@ describe("sync-codex", () => {
       { cwd: projectRoot },
     );
 
-    expect(stdout).toMatch(/^Synced Codex [0-9a-f]{12} with 6 supported models\.\n$/);
+    expect(stdout).toMatch(new RegExp(`^Synced Codex [0-9a-f]{12} with ${minorRelease ? 7 : 6} supported models\\.\\n$`));
     const generated = await readFile(
       join(projectRoot, "src", "codex-target.generated.ts"),
       "utf8",
@@ -52,9 +54,10 @@ describe("sync-codex", () => {
       { cwd: sourceRoot },
     );
     expect(target.sourceRevision).toBe(fixtureRevision.trim());
-    expect(target.defaultModel).toBe("gpt-6-astra");
+    expect(target.defaultModel).toBe(minorRelease ? "gpt-6.1-sol" : "gpt-6-astra");
     expect(target.minimumClientVersion).toBe("0.155.0");
     expect(target.models.map((entry) => entry.id)).toEqual([
+      ...(minorRelease ? ["gpt-6.1-sol"] : []),
       "gpt-6-astra",
       "gpt-6-sol",
       "gpt-6-luna",
@@ -78,9 +81,28 @@ describe("sync-codex", () => {
       await readFile(join(sourceRoot, "codex-rs", "core", "config.schema.json"), "utf8"),
     );
   });
+
+  test("refuses an upstream default outside the curated catalog before writing outputs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codex-config-sync-"));
+    const projectRoot = join(directory, "project");
+    const sourceRoot = join(directory, "codex-source");
+    const scriptPath = join(projectRoot, "scripts", "sync-codex.mjs");
+    await mkdir(join(projectRoot, "scripts"), { recursive: true });
+    await copyFile(join(process.cwd(), "scripts", "sync-codex.mjs"), scriptPath);
+    await writeCodexFixture(sourceRoot, "paths", true);
+    const modelsPath = join(sourceRoot, "codex-rs", "models-manager", "models.json");
+    const catalog = JSON.parse(await readFile(modelsPath, "utf8"));
+    catalog.models.unshift({ ...model("gpt-5.5"), priority: -3 });
+    await writeFile(modelsPath, JSON.stringify(catalog));
+    await initializeGitRepository(sourceRoot);
+    await expect(execFileAsync(process.execPath, [scriptPath, "--source", sourceRoot], { cwd: projectRoot }))
+      .rejects.toMatchObject({ stderr: expect.stringContaining("upstream default model is outside the supported catalog") });
+    await expect(readFile(join(projectRoot, "config.schema.json"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  });
 });
 
-async function writeCodexFixture(sourceRoot: string, format: string): Promise<void> {
+async function writeCodexFixture(sourceRoot: string, format: string, minorRelease = false): Promise<void> {
   const files = new Map<string, string>([
     [
       "codex-rs/core/config.schema.json",
@@ -88,7 +110,14 @@ async function writeCodexFixture(sourceRoot: string, format: string): Promise<vo
     ],
     [
       "codex-rs/models-manager/models.json",
-      `${JSON.stringify({ models: [model("gpt-6-astra"), model("gpt-6-sol"), model("gpt-6-luna"), model("gpt-5.6-sol"), model("gpt-5.6-terra"), model("gpt-5.6-luna")] }, null, 2)}\n`,
+      `${JSON.stringify({ models: [
+        model("gpt-5.6-luna"), model("gpt-6-astra"), model("gpt-6-sol"),
+        model("gpt-6-luna"), model("gpt-5.6-sol"), model("gpt-5.6-terra"),
+        ...(minorRelease ? [model("gpt-6.1-sol")] : []),
+        { ...model("gpt-6.2-sol"), visibility: "hide", priority: -1 },
+        { ...model("gpt-6.3-sol"), supported_in_api: false, priority: -2 },
+        { ...model("gpt-5.5"), priority: 20 },
+      ] }, null, 2)}\n`,
     ],
     [
       "codex-rs/features/src/lib.rs",
@@ -157,6 +186,9 @@ const CONFIG_KEY_ALIASES: &[ConfigKeyAlias] = &[
 function model(slug: string): Record<string, unknown> {
   return {
     slug,
+    visibility: "list",
+    supported_in_api: true,
+    priority: ["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].indexOf(slug),
     display_name: slug,
     context_window: 128_000,
     supported_reasoning_levels: [{ effort: "high" }],

@@ -75,7 +75,8 @@ const RETIRED_CONFIG_PATHS = [
 // model may be a newly released model or an account-specific alias, not obsolete.
 export const LEGACY_DEFAULT_MODELS: readonly string[] = ["gpt-5.5"];
 
-const RETIRED_UI_KEYS = new Set(["show_plan"]);
+export const RETIRED_TUI_KEYS = ["prompt_suggestions"] as const;
+const RETIRED_UI_KEYS = new Set<string>(["show_plan", ...RETIRED_TUI_KEYS]);
 
 const DEPRECATED_JS_REPL_KEYS = [
   "js_repl_node_path",
@@ -327,6 +328,11 @@ function migrateScopedConfig(
   migrateWebSearch(parsed, migrationValues, removalPaths, scope);
   migrateFeatureFlags(parsed, migrationValues, removalPaths, scope);
 
+  for (const key of RETIRED_TUI_KEYS) {
+    if (hasPath(parsed, scoped("tui", key))) {
+      removalPaths.push(scoped("tui", key));
+    }
+  }
   for (const key of DEPRECATED_JS_REPL_KEYS) {
     if (hasPath(parsed, scoped(key))) {
       removalPaths.push(scoped(key));
@@ -423,20 +429,6 @@ function migrateFeatureFlags(
   scope: string[],
 ): void {
   const scoped = (...path: string[]): string[] => [...scope, ...path];
-  const legacyThreadContext = scoped("features", "guardian_thread_context");
-  if (hasPath(parsed, legacyThreadContext)) {
-    const guardian = getPath(parsed, scoped("features", "guardianv2"));
-    if (typeof guardian === "boolean") {
-      setMigrationValue(migrationValues, scoped("features", "guardianv2"), {
-        enabled: guardian,
-        thread_context: getPath(parsed, legacyThreadContext),
-      });
-      removalPaths.push(legacyThreadContext);
-    } else {
-      migrateKey(parsed, migrationValues, removalPaths, legacyThreadContext,
-        scoped("features", "guardianv2", "thread_context"));
-    }
-  }
   for (const [alias, canonical] of Object.entries(CODEX_TARGET.legacyFeatureAliases)) {
     const aliasPath = scoped("features", alias);
     if (!hasPath(parsed, aliasPath)) {

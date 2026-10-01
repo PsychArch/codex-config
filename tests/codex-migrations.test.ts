@@ -46,7 +46,7 @@ ${canonical === undefined ? "" : `disable_paste_burst = ${canonical}`}
     },
   );
 
-  test("migrates the v0.2 defaults to the Astra configuration", () => {
+  test("migrates the v0.2 defaults to the GPT-6.1 Sol configuration", () => {
     const target = `approval_policy = "never"
 sandbox_mode = "danger-full-access"
 model = "gpt-5.5"
@@ -71,7 +71,7 @@ url = "https://example.test/jina"
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.model).toBe("gpt-6-astra");
+    expect(parsed.model).toBe("gpt-6.1-sol");
     expect(parsed.default_permissions).toBe(":danger-full-access");
     expect(parsed).not.toHaveProperty("sandbox_mode");
     expect(parsed).not.toHaveProperty("personality");
@@ -209,7 +209,7 @@ ${CODEX_TARGET.retiredFeatureKeys.map((key) => `${key} = true`).join("\n")}
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.features).toEqual({ guardianv2: { thread_context: true } });
+    expect(parsed.features).toEqual({});
     expect(plan.operations.filter((operation) => operation.action === "remove")
       .map((operation) => operation.path).sort()).toEqual(
       CODEX_TARGET.retiredFeatureKeys.map((key) => `features.${key}`).sort(),
@@ -967,28 +967,28 @@ ui = "custom-client-state"
 });
 
 describe("adaptCodexTemplate", () => {
-  const template = `model = "gpt-6-astra"
+  const template = `model = "gpt-6.1-sol"
 model_context_window = 1000000
 model_auto_compact_token_limit = 900000
 default_permissions = ":danger-full-access"
 `;
 
-  test("keeps expanded context defaults for GPT-6 Astra", () => {
-    expect(parse(adaptCodexTemplate('model = "gpt-6-astra"\n', template))).toEqual(
+  test("keeps expanded context defaults for GPT-6.1 Sol", () => {
+    expect(parse(adaptCodexTemplate('model = "gpt-6.1-sol"\n', template))).toEqual(
       parse(template),
     );
     expect(parse(adaptCodexTemplate("", template))).toEqual(parse(template));
   });
 
-  test("keeps Astra context defaults through generic provider routes", () => {
+  test("keeps GPT-6.1 Sol context defaults through generic provider routes", () => {
     const provider = adaptCodexTemplate(
-      `model = "gpt-6-astra"
+      `model = "gpt-6.1-sol"
 model_provider = "example-gateway"
 `,
       template,
     );
     const baseUrl = adaptCodexTemplate(
-      `model = "gpt-6-astra"
+      `model = "gpt-6.1-sol"
 openai_base_url = "https://gateway.example.test/v1"
 `,
       template,
@@ -998,7 +998,8 @@ openai_base_url = "https://gateway.example.test/v1"
     expect(parse(baseUrl)).toEqual(parse(template));
   });
 
-  test("does not inject Astra context defaults into alternate or custom models", () => {
+  test("does not inject GPT-6.1 Sol context defaults into alternate or custom models", () => {
+    const astra = parse(adaptCodexTemplate('model = "gpt-6-astra"\n', template));
     const terra = parse(adaptCodexTemplate('model = "gpt-5.6-terra"\n', template));
     const custom = parse(
       adaptCodexTemplate(
@@ -1010,9 +1011,10 @@ model_provider = "example-gateway"
     );
 
     expect(terra).toEqual({
-      model: "gpt-6-astra",
+      model: "gpt-6.1-sol",
       default_permissions: ":danger-full-access",
     });
+    expect(astra).toEqual(terra);
     expect(custom).toEqual(terra);
   });
 
@@ -1026,6 +1028,6 @@ writable_roots = ["/workspace/cache"]
       template,
     );
 
-    expect(parse(adapted)).toEqual({ model: "gpt-6-astra" });
+    expect(parse(adapted)).toEqual({ model: "gpt-6.1-sol" });
   });
 });

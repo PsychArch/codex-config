@@ -10,9 +10,8 @@ import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
-describe("Codex 0.159.1 compatibility", () => {
+describe("compatibility retained from Codex 0.159.1", () => {
   test("pins the stable release catalog and all GPT-6.1 Sol capabilities", () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("8e68a98ef03cdde76d2e6800791ebdf1b3b95b24");
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.models.map(({ id }) => id)).toEqual([
       "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",

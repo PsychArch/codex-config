@@ -119,7 +119,6 @@ redo = "ctrl-r"
       `model = "gpt-5.6-sol"
 
 [features]
-apply_patch_preserve_line_endings = true
 background_paginated_rollout_migration = true
 code_mode_interrupt = true
 executed_tool_call_metadata = true

@@ -298,6 +298,26 @@ function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown
       }
     }
   }
+  const plugins = getPath(parsed, ["plugins"]);
+  if (isRecord(plugins)) {
+    for (const [pluginName, plugin] of Object.entries(plugins)) {
+      const servers = getPath(plugin, ["mcp_servers"]);
+      if (!isRecord(servers)) {
+        continue;
+      }
+      for (const [serverName, server] of Object.entries(servers)) {
+        if (hasPath(server, ["ema_auth"])) {
+          issues.push({
+            severity: "warning",
+            code: "unsupported_plugin_ema_auth",
+            path: ["plugins", pluginName, "mcp_servers", serverName, "ema_auth"]
+              .map(formatPathSegment).join("."),
+            message: "Plugin EMA overlays are retired; Codex disables this server while ema_auth is present. The overlay is preserved because removing it could change authentication behavior. Configure enterprise authentication in a trusted non-project MCP registration before removing it.",
+          });
+        }
+      }
+    }
+  }
   for (const [table, legacyKey, canonicalKey] of [
     [
       "ghost_snapshot",
@@ -406,6 +426,14 @@ function isRuntimeCompatibilityProperty(
   property: string,
 ): boolean {
   const value = getPath(parsed, [...tablePath, property]);
+  // Upstream consumes any legacy EMA value and disables the plugin server.
+  // Keep that fail-closed behavior instead of deleting its authentication policy.
+  if (
+    property === "ema_auth" && tablePath.length === 4 &&
+    tablePath[0] === "plugins" && tablePath[2] === "mcp_servers"
+  ) {
+    return true;
+  }
   if (
     RETIRED_TUI_KEYS.includes(property as never) &&
     ((tablePath.length === 1 && tablePath[0] === "tui") ||

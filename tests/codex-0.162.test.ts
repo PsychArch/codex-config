@@ -10,9 +10,8 @@ import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
-describe("Codex 0.162.1 compatibility", () => {
-  test("pins the stable release and retains the default and model capabilities", () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("092d3acd6bec3e3a14bdc7e7a2810ab628ab759d");
+describe("compatibility retained from Codex 0.162.1", () => {
+  test("retains the default and model capabilities", () => {
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");
     expect(CODEX_TARGET.removedFeatureKeys).toContain("apply_patch_preserve_line_endings");
@@ -60,7 +59,6 @@ incremental_tools = true
         guardianv2_decisions_comparison: true, in_app_voice: false,
         incremental_tools: true, login_shell_package_path: true,
         model_catalog_in_context: true, multi_agent_v2_dynamic_tools: true,
-        stable_environment_tools: true,
         guardianv2: {
           enabled: true, transcript_mode: "json", async_classifier_mode: "conversation",
           async_classifier_conversation_token_limit: 100000,

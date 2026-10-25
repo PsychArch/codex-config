@@ -140,10 +140,6 @@ export function planCodexMigrations(
     parsed, migrationValues, removalPaths,
     ["orchestrator", "skills", "enabled"], ["cloud", "skills", "enabled"],
   );
-  migrateKey(
-    parsed, migrationValues, removalPaths,
-    ["features", "transcript_v2"], ["tui", "fullscreen_transcript"],
-  );
   for (const [legacyKey, canonicalKey] of Object.entries(GHOST_SNAPSHOT_KEY_ALIASES)) {
     migrateKey(
       parsed,
@@ -326,6 +322,10 @@ function migrateScopedConfig(
 
   migrateApprovalPolicy(parsed, migrationValues, removalPaths, scope);
   migrateWebSearch(parsed, migrationValues, removalPaths, scope);
+  migrateKey(
+    parsed, migrationValues, removalPaths,
+    scoped("features", "transcript_v2"), scoped("tui", "fullscreen_transcript"),
+  );
   migrateFeatureFlags(parsed, migrationValues, removalPaths, scope);
 
   for (const key of RETIRED_TUI_KEYS) {

@@ -70,7 +70,16 @@ export { CODEX_TARGET };
 
 async function configValidator(): Promise<ValidateFunction> {
   validatorPromise ??= readFile(defaultSchemaPath(), "utf8").then((text) => {
-    const schema = JSON.parse(text) as object;
+    const schema = JSON.parse(text) as {
+      definitions: Record<string, Record<string, unknown>>;
+    };
+    // Schemars omits the flattened map's value schema. Restore the Rust
+    // PermissionsToml -> PermissionProfileToml relationship for validation only;
+    // keep the bundled upstream schema byte-for-byte unchanged.
+    schema.definitions.PermissionsToml = {
+      ...schema.definitions.PermissionsToml,
+      additionalProperties: { $ref: "#/definitions/PermissionProfileToml" },
+    };
     const ajv = new Ajv({ allErrors: true, strict: false });
     addNumericFormats(ajv);
     return ajv.compile(schema);
@@ -521,6 +530,10 @@ function runtimeSemanticIssues(parsed: unknown): ConfigIssue[] {
   return [
     ...tomlIntegerRangeIssues(parsed),
     ...mcpServerIssues(parsed),
+    ...enterpriseIdpIssues(parsed),
+    ...tuiPresetIssues(parsed),
+    ...windowsSandboxIssues(parsed),
+    ...networkMitmIssues(parsed),
     ...modelProviderIssues(parsed),
     ...providerSelectionIssues(parsed),
   ];
@@ -586,9 +599,33 @@ function mcpServerIssues(parsed: unknown): ConfigIssue[] {
         issues.push(runtimeIssue("mcp_invalid_oauth_client_secret", secretPath,
           "oauth.client_secret requires oauth.client_id."));
       }
-      if (value.auth === "ema_auth") {
+      if (value.auth === "ema_auth" && blank(value.oauth.authorization_server_issuer)) {
         issues.push(runtimeIssue("mcp_invalid_oauth_client_secret", secretPath,
-          "ema_auth cannot be combined with oauth.client_secret."));
+          "Confidential ema_auth requires oauth.authorization_server_issuer."));
+      }
+    }
+    if (isRecord(value.oauth) && value.oauth.token_endpoint_auth_method !== undefined) {
+      const path = `${basePath}.oauth.token_endpoint_auth_method`;
+      if (value.auth !== "ema_auth") {
+        issues.push(runtimeIssue("mcp_invalid_oauth_auth_method", path,
+          'oauth.token_endpoint_auth_method requires auth = "ema_auth".'));
+      }
+      if (value.oauth.client_secret === undefined) {
+        issues.push(runtimeIssue("mcp_invalid_oauth_auth_method", path,
+          "oauth.token_endpoint_auth_method requires oauth.client_secret."));
+      }
+    }
+    if (value.auth === "ema_auth") {
+      if (value.environment_id !== undefined && value.environment_id !== "local") {
+        issues.push(runtimeIssue("mcp_invalid_ema_transport", `${basePath}.environment_id`,
+          "ema_auth requires a host-owned MCP connection."));
+      }
+      for (const field of ["bearer_token_env_var", "http_headers", "env_http_headers", "http_headers_helper"]) {
+        const fieldValue = value[field];
+        if (fieldValue !== undefined && (!isRecord(fieldValue) || Object.keys(fieldValue).length > 0)) {
+          issues.push(runtimeIssue("mcp_invalid_ema_transport", `${basePath}.${field}`,
+            "ema_auth cannot be combined with alternate HTTP credentials."));
+        }
       }
     }
     const hasCommand = typeof value.command === "string";
@@ -654,6 +691,103 @@ function mcpServerIssues(parsed: unknown): ConfigIssue[] {
             "Expected a finite, non-negative duration.",
           ),
         );
+      }
+    }
+  }
+  return issues;
+}
+
+function enterpriseIdpIssues(parsed: unknown): ConfigIssue[] {
+  const idp = getPath(parsed, ["mcp_enterprise_managed_auth", "idp"]);
+  if (!isRecord(idp)) {
+    return [];
+  }
+  const issues: ConfigIssue[] = [];
+  if (typeof idp.client_secret === "string" && idp.client_secret.trim() === "") {
+    issues.push(runtimeIssue("mcp_invalid_idp_client_secret", "mcp_enterprise_managed_auth.idp.client_secret",
+      "Enterprise IdP client_secret must not be empty."));
+  }
+  if (idp.token_endpoint_auth_method !== undefined && idp.client_secret === undefined) {
+    issues.push(runtimeIssue("mcp_invalid_idp_auth_method", "mcp_enterprise_managed_auth.idp.token_endpoint_auth_method",
+      "Enterprise IdP token_endpoint_auth_method requires client_secret."));
+  }
+  return issues;
+}
+
+function tuiPresetIssues(parsed: unknown): ConfigIssue[] {
+  const presets = getPath(parsed, ["tui", "presets"]);
+  if (!isRecord(presets)) {
+    return [];
+  }
+  const issues: ConfigIssue[] = [];
+  for (const [slot, preset] of Object.entries(presets)) {
+    const path = `tui.presets.${formatPathSegment(slot)}`;
+    if (!/^[0-9]$/.test(slot)) {
+      issues.push(runtimeIssue("invalid_tui_preset", path, "Preset slot must be a single digit from 0 to 9."));
+    }
+    if (!isRecord(preset) || typeof preset.input !== "string") {
+      continue;
+    }
+    const input = preset.input;
+    if (input.trim() === "" || input.trimStart().startsWith("!") || Buffer.byteLength(input, "utf8") > 8_000) {
+      issues.push(runtimeIssue("invalid_tui_preset", `${path}.input`,
+        "Preset input must be nonempty, at most 8,000 UTF-8 bytes, and a prompt or slash command rather than a shell command."));
+    }
+  }
+  return issues;
+}
+
+function windowsSandboxIssues(parsed: unknown): ConfigIssue[] {
+  return getPath(parsed, ["windows", "sandbox"]) === "mxc" &&
+    getPath(parsed, ["windows", "allow_mxc"]) === false
+    ? [runtimeIssue("windows_mxc_disabled", "windows.sandbox",
+      'windows.sandbox = "mxc" is not allowed when windows.allow_mxc = false.')]
+    : [];
+}
+
+function networkMitmIssues(parsed: unknown): ConfigIssue[] {
+  const permissions = getPath(parsed, ["permissions"]);
+  if (!isRecord(permissions)) {
+    return [];
+  }
+  const issues: ConfigIssue[] = [];
+  for (const [profile, value] of Object.entries(permissions)) {
+    const mitm = getPath(value, ["network", "mitm"]);
+    if (!isRecord(mitm)) {
+      continue;
+    }
+    const path = `permissions.${formatPathSegment(profile)}.network.mitm`;
+    if (isRecord(mitm.actions)) {
+      for (const [name, action] of Object.entries(mitm.actions)) {
+        if (!isRecord(action)) {
+          continue;
+        }
+        const headers = Array.isArray(action.inject_request_headers) ? action.inject_request_headers : [];
+        const stripped = Array.isArray(action.strip_request_headers) ? action.strip_request_headers : [];
+        if (mitm.version === undefined && headers.some((header) => isRecord(header) && header.placeholder !== undefined)) {
+          issues.push(runtimeIssue("network_mitm_version_required", path,
+            "Scoped MITM actions require network.mitm.version = 2."));
+        }
+        if (headers.length === 0 && stripped.length === 0) {
+          issues.push(runtimeIssue("network_mitm_empty_action", `${path}.actions.${formatPathSegment(name)}`,
+            "MITM actions must define at least one operation."));
+        }
+      }
+    }
+    if (isRecord(mitm.hooks)) {
+      for (const [name, hook] of Object.entries(mitm.hooks)) {
+        if (!isRecord(hook)) {
+          continue;
+        }
+        const hasOriginScope = [hook.schemes, hook.ports].some((items) => Array.isArray(items) && items.length > 0);
+        if (mitm.version === undefined && hasOriginScope) {
+          issues.push(runtimeIssue("network_mitm_version_required", path,
+            "Scoped MITM hooks require network.mitm.version = 2."));
+        }
+        if (Array.isArray(hook.action) && hook.action.length === 0) {
+          issues.push(runtimeIssue("network_mitm_empty_hook", `${path}.hooks.${formatPathSegment(name)}.action`,
+            "MITM hook action must not be empty."));
+        }
       }
     }
   }

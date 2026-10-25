@@ -37,7 +37,7 @@ bunx codex-config@latest apply
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This version targets Codex **0.162.1**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
+This version targets Codex **0.164.0**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -101,11 +101,13 @@ pn --silent dlx codex-config@latest doctor
 
 All commands support `--json` for machine-readable output.
 
-Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, and MCP authorization-server issuer requirements. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled GPT-6.1 Sol model.
+Doctor also checks gateway OAuth delivery and URL restrictions, AWS credential-export conflicts, confidential MCP enterprise OAuth, TUI presets, Windows sandbox conflicts, and versioned network MITM rules. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled GPT-6.1 Sol model.
+
+`analytics.enabled = false` disables OpenAI analytics. Custom OTLP metrics exporters remain active unless `otel.metrics_exporter = "none"` is set; existing exporter choices are preserved.
 
 The template retains `tui.alternate_screen = "never"` for native scrollback. To use Codex's fullscreen transcript, choose `tui.alternate_screen = "auto"` (or `"always"`) and `tui.fullscreen_transcript = true`. Memory v2 and post-turn compaction settings are supported but are not enabled by the template. `features.instant_interrupt` now defaults on upstream; the template leaves it and `auto_review.circuit_break_action` at their upstream defaults. Removed `tui.prompt_suggestions` settings and the obsolete `features.apply_patch_preserve_line_endings` flag are cleaned up, including in legacy inline profile tables. Codex always preserves patch line endings now.
 
-Codex 0.162.1 also supports custom provider capability overrides, Guardian transcript/classifier settings, microphone channel selection, transcript mouse scroll speed, and Agent Command Center grouping and shortcuts. Explicit settings are preserved and validated; these options are not added to the curated template. See the [compatibility review](docs/codex-0.162.1-analysis.md) for the full drift analysis.
+Codex 0.162.1 also supports custom provider capability overrides, Guardian transcript/classifier settings, microphone channel selection, transcript mouse scroll speed, and Agent Command Center grouping and shortcuts. Explicit settings are preserved and validated; these options are not added to the curated template. Codex 0.164.0 adds TUI presets, plugin defaults and remote metadata, model-request hooks, and opt-in background compaction. See the [compatibility review](docs/codex-0.164.0-analysis.md) for the full drift analysis.
 
 Retired `plugins.<plugin>.mcp_servers.<server>.ema_auth` overlays receive a doctor warning and remain preserved: Codex disables the affected plugin server while the overlay is present. Configure enterprise authentication through a trusted non-project MCP registration before manually removing the old overlay. Apply does not remove authentication policy automatically.
 
@@ -138,3 +140,5 @@ pnpm sync:codex -- --source /path/to/codex
 ```
 
 The source checkout must include complete first-parent history so retired configuration keys can be detected. The sync script discovers visible, API-supported GPT-6 (including minor releases) and GPT-5.6 models, orders them by upstream priority, and derives the default from the upstream picker order. It fails if that default falls outside the curated families.
+
+Version-bump merges to `main` run the checks and build, create the matching stable GitHub release, and publish to npm through the existing trusted publishing workflow. Package edits that keep the same version do not release. Existing npm versions are skipped on retries.

@@ -286,6 +286,11 @@ function appendRuntimeCompatibilityIssues(issues: ConfigIssue[], parsed: unknown
           message: "This TUI setting is no longer consumed by Codex and should be removed." });
       }
     }
+    const classifierPath = [...scope, "features", "guardianv2", "async_classifier_mode"];
+    if (hasPath(parsed, classifierPath)) {
+      issues.push({ severity: "warning", code: "ignored_guardian_classifier_mode", path: classifierPath.join("."),
+        message: "Guardian asynchronous classification always uses conversations; this deprecated setting is ignored." });
+    }
     const toolsWebSearchPath = [...scope, "tools", "web_search"];
     if (typeof getPath(parsed, toolsWebSearchPath) === "boolean") {
       issues.push({
@@ -764,11 +769,13 @@ function networkMitmIssues(parsed: unknown): ConfigIssue[] {
         }
         const headers = Array.isArray(action.inject_request_headers) ? action.inject_request_headers : [];
         const stripped = Array.isArray(action.strip_request_headers) ? action.strip_request_headers : [];
-        if (mitm.version === undefined && headers.some((header) => isRecord(header) && header.placeholder !== undefined)) {
+        const hasProxyAction = action.aws_sigv4 !== undefined || action.body_secret_substitution !== undefined;
+        if (mitm.version === undefined && (hasProxyAction ||
+          headers.some((header) => isRecord(header) && header.placeholder !== undefined))) {
           issues.push(runtimeIssue("network_mitm_version_required", path,
             "Scoped MITM actions require network.mitm.version = 2."));
         }
-        if (headers.length === 0 && stripped.length === 0) {
+        if (!hasProxyAction && headers.length === 0 && stripped.length === 0) {
           issues.push(runtimeIssue("network_mitm_empty_action", `${path}.actions.${formatPathSegment(name)}`,
             "MITM actions must define at least one operation."));
         }
@@ -778,6 +785,14 @@ function networkMitmIssues(parsed: unknown): ConfigIssue[] {
       for (const [name, hook] of Object.entries(mitm.hooks)) {
         if (!isRecord(hook)) {
           continue;
+        }
+        for (const operation of ["aws_sigv4", "body_secret_substitution"] as const) {
+          const count = Array.isArray(hook.action) ? hook.action.filter((name) =>
+            typeof name === "string" && getPath(mitm, ["actions", name, operation]) !== undefined).length : 0;
+          if (count > 1) {
+            issues.push(runtimeIssue("network_mitm_duplicate_action", `${path}.hooks.${formatPathSegment(name)}.action`,
+              `MITM hooks must select at most one ${operation} action.`));
+          }
         }
         const hasOriginScope = [hook.schemes, hook.ports].some((items) => Array.isArray(items) && items.length > 0);
         if (mitm.version === undefined && hasOriginScope) {
@@ -801,7 +816,7 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
     return issues;
   }
 
-  const reserved = new Set(["openai", "ollama", "lmstudio"]);
+  const reserved = new Set(["ollama", "lmstudio"]);
   const bedrockProviders = new Set(["amazon-bedrock", "amazon-bedrock-runtime"]);
   for (const [name, value] of Object.entries(providers)) {
     const basePath = `model_providers.${formatPathSegment(name)}`;
@@ -818,15 +833,28 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
     if (!isRecord(value)) {
       continue;
     }
+    if (name === "openai" || name === "gcp") {
+      const allowed = name === "openai" ? ["model_catalog_url"] :
+        ["base_url", "auth", "http_headers", "project_id", "location", "credential_file"];
+      for (const [field, fieldValue] of Object.entries(value)) {
+        if (!allowed.includes(field) && !isDefaultProviderField(field, fieldValue)) {
+          issues.push(runtimeIssue(name === "openai" ? "reserved_model_provider" : "gcp_provider_override",
+            `${basePath}.${field}`, `${name} only supports overriding ${allowed.join(", ")}.`));
+        }
+      }
+      if (name === "openai") {
+        if (typeof value.model_catalog_url === "string" && !validOpenAICatalogUrl(value.model_catalog_url)) {
+          issues.push(runtimeIssue("invalid_openai_catalog_url", `${basePath}.model_catalog_url`,
+            "OpenAI model catalog URLs require HTTPS and an allowed ChatGPT host; use a custom provider for other hosts."));
+        }
+        continue;
+      }
+      appendGcpCredentialIssues(issues, value, basePath);
+    }
     issues.push(...gatewayOAuthIssues(value, basePath, bedrockProviders.has(name)));
     if (bedrockProviders.has(name)) {
       for (const [field, fieldValue] of Object.entries(value)) {
-        const isDefaultField =
-          (field === "name" && fieldValue === "") ||
-          (field === "wire_api" && fieldValue === "responses") ||
-          (field === "requires_openai_auth" && fieldValue === false) ||
-          (field === "supports_websockets" && fieldValue === false) ||
-          (field === "supports_standalone_web_search" && fieldValue === false);
+        const isDefaultField = isDefaultProviderField(field, fieldValue);
         const isSupportedOverride = ["base_url", "auth", "http_headers", "aws"].includes(
           field,
         );
@@ -844,7 +872,7 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
       appendProviderAuthIssues(issues, value, basePath);
       continue;
     }
-    if (typeof value.name !== "string" || value.name.trim() === "") {
+    if (name !== "gcp" && (typeof value.name !== "string" || value.name.trim() === "")) {
       issues.push(
         runtimeIssue(
           "model_provider_name_required",
@@ -863,9 +891,39 @@ function modelProviderIssues(parsed: unknown): ConfigIssue[] {
       );
     }
 
+    if (name !== "gcp" && value.name === "Google Cloud Vertex AI") {
+      appendGcpCredentialIssues(issues, value, basePath);
+    }
     appendProviderAuthIssues(issues, value, basePath);
   }
   return issues;
+}
+
+function isDefaultProviderField(field: string, value: unknown): boolean {
+  return (field === "name" && value === "") ||
+    (field === "wire_api" && value === "responses") ||
+    (["requires_openai_auth", "supports_websockets", "supports_standalone_web_search"].includes(field) && value === false);
+}
+
+function validOpenAICatalogUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const authority = value.match(/^https:\/\/([^/?#]+)/)?.[1];
+    return authority !== undefined && !/[@%\s\\\u0080-\uffff]/.test(authority) &&
+      !url.username && !url.password && !value.includes("#") && !/[\s\\]/.test(value) &&
+      (["chatgpt.com", "chat.openai.com", "chatgpt-staging.com"].includes(host) ||
+        host.endsWith(".chatgpt.com") || host.endsWith(".chatgpt-staging.com"));
+  } catch {
+    return false;
+  }
+}
+
+function appendGcpCredentialIssues(issues: ConfigIssue[], provider: Record<string, unknown>, basePath: string): void {
+  if (typeof provider.credential_file === "string" && !isAbsolute(provider.credential_file)) {
+    issues.push(runtimeIssue("gcp_invalid_credential_file", `${basePath}.credential_file`,
+      "GCP credential_file must be an absolute path."));
+  }
 }
 
 function appendAwsAuthIssues(
@@ -971,6 +1029,7 @@ function providerSelectionIssues(parsed: unknown): ConfigIssue[] {
     "lmstudio",
     "amazon-bedrock",
     "amazon-bedrock-runtime",
+    "gcp",
   ]);
   for (const field of ["model_provider", "oss_provider"] as const) {
     const provider = getPath(parsed, [field]);

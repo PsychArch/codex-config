@@ -60,7 +60,7 @@ incremental_tools = true
         incremental_tools: true, login_shell_package_path: true,
         model_catalog_in_context: true, multi_agent_v2_dynamic_tools: true,
         guardianv2: {
-          enabled: true, transcript_mode: "json", async_classifier_mode: "conversation",
+          enabled: true, transcript_mode: "json",
           async_classifier_conversation_token_limit: 100000,
         },
         multi_agent_v2: { enabled: true, message_board_remote: {

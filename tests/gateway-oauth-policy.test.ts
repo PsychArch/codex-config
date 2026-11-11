@@ -52,7 +52,7 @@ describe("gateway OAuth runtime compatibility", () => {
     expect(JSON.stringify(result)).not.toContain("dummy");
   });
 
-  test.each(["Authorization", "Proxy-Authorization", "Cookie", "Host", "Content-Length", "X-Codex-Test", "X-OpenAI-Test", "Sec-WebSocket-Key", "Bad Header", "Header\n"])(
+  test.each(["Proxy-Authorization", "Cookie", "Host", "Content-Length", "X-Codex-Test", "X-OpenAI-Test", "Sec-WebSocket-Key", "Bad Header", "Header\n"])(
     "rejects reserved or invalid delivery header %s", async (name) => {
       const value = provider();
       value.gateway_oauth.delivery.name = name;
@@ -87,4 +87,57 @@ describe("gateway OAuth runtime compatibility", () => {
       expect((await inspect(value)).issues).toContainEqual(expect.objectContaining({ code: "invalid_gateway_oauth" }));
     },
   );
+});
+
+describe("gateway OAuth default Authorization delivery", () => {
+  test.each([undefined, { kind: "header", name: "AUTHORIZATION", scheme: "bearer" }])(
+    "accepts default or explicit bearer delivery %#", async (delivery) => {
+      const value = provider();
+      value.gateway_oauth.delivery = delivery;
+      expect(await inspect(value)).toEqual({ valid: true, clean: true, issues: [] });
+    },
+  );
+
+  test.each(["keyring", "file"])("accepts credentials_store=%s", async (store) => {
+    const value = provider();
+    delete value.gateway_oauth.delivery;
+    value.gateway_oauth.credentials_store = store;
+    expect((await inspect(value)).valid).toBe(true);
+  });
+
+  test.each([
+    { env_key: "TEST_KEY" }, { experimental_bearer_token: "test-placeholder" },
+    { requires_openai_auth: true }, { auth: { command: "print-token" } },
+    { http_headers: { Authorization: "test-placeholder" } },
+    { env_http_headers: { AUTHORIZATION: "TEST_TOKEN" } },
+    { name: "Google Cloud Vertex AI" },
+  ])("rejects primary credential collisions %#", async (extra) => {
+    const value = { ...provider(), ...extra };
+    delete value.gateway_oauth.delivery;
+    expect((await inspect(value)).issues).toContainEqual(expect.objectContaining({ code: "invalid_gateway_oauth" }));
+  });
+
+  test.each(["https://other.example.test/catalog", "https://gateway.example.test:8443/catalog",
+    "http://localhost/catalog", "https://user:placeholder@gateway.example.test/catalog"])(
+    "rejects unsafe or different-origin catalog %s", async (catalog) => {
+      const value = provider();
+      delete value.gateway_oauth.delivery;
+      value.model_catalog_url = catalog;
+      const result = await inspect(value);
+      expect(result.issues).toContainEqual(expect.objectContaining({ code: "invalid_gateway_oauth", path: "model_providers.gateway.model_catalog_url" }));
+      expect(JSON.stringify(result)).not.toContain("placeholder");
+    },
+  );
+
+  test("accepts equivalent default ports and preserves secondary delivery across origins", async () => {
+    const value = provider();
+    delete value.gateway_oauth.delivery;
+    value.model_catalog_url = "https://gateway.example.test:443/catalog";
+    expect((await inspect(value)).valid).toBe(true);
+    value.gateway_oauth.delivery = { kind: "cookie", name: "session" };
+    value.model_catalog_url = "https://other.example.test/catalog";
+    expect((await inspect(value)).valid).toBe(true);
+    value.gateway_oauth.delivery = { kind: "header", name: "Authorization", scheme: "Basic" };
+    expect((await inspect(value)).valid).toBe(false);
+  });
 });

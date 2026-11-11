@@ -39,9 +39,9 @@ export function gatewayOAuthIssues(
   if (gateway.redirect_port === 0 || gateway.redirect_port === 0n) {
     issue("gateway_oauth.redirect_port", "Gateway OAuth redirect port must be nonzero.");
   }
-  const delivery = gateway.delivery;
+  const delivery = gateway.delivery ?? { kind: "header", name: "Authorization", scheme: "Bearer" };
   if (!isRecord(delivery)) {
-    return issues; // The schema reports a missing or malformed delivery object.
+    return issues; // The schema reports a malformed delivery object.
   }
   const name = typeof delivery.name === "string" ? delivery.name : "";
   let header: string | undefined;
@@ -49,7 +49,21 @@ export function gatewayOAuthIssues(
     const headerName = name.toLowerCase();
     header = headerName;
     const scheme = delivery.scheme ?? "Bearer";
-    if (!isHttpToken(name) || !isHttpToken(scheme) ||
+    const authorizationBearer = headerName === "authorization" &&
+      typeof scheme === "string" && scheme.toLowerCase() === "bearer";
+    if (authorizationBearer) {
+      if (provider.name === "Google Cloud Vertex AI" || provider.requires_openai_auth === true ||
+        provider.env_key !== undefined || provider.experimental_bearer_token !== undefined ||
+        isRecord(provider.auth)) {
+        issue("gateway_oauth.delivery", "Gateway Authorization delivery conflicts with the provider credential; choose a custom header or cookie.");
+      }
+      if (provider.model_catalog_url !== undefined) {
+        if (!validGatewayUrl(provider.model_catalog_url) || !validGatewayUrl(provider.base_url) ||
+          new URL(provider.model_catalog_url as string).origin !== new URL(provider.base_url as string).origin) {
+          issue("model_catalog_url", "Gateway Authorization delivery requires the catalog and base URL to share the same scheme, host, and port.");
+        }
+      }
+    } else if (!isHttpToken(name) || !isHttpToken(scheme) ||
       RESERVED_HEADERS.has(headerName) || RESERVED_PREFIXES.some((prefix) => headerName.startsWith(prefix))) {
       issue("gateway_oauth.delivery", "Invalid or reserved gateway OAuth delivery header or scheme.");
     }

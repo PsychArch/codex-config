@@ -15,7 +15,7 @@ describe("compatibility retained from Codex 0.159.1", () => {
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.models.map(({ id }) => id)).toEqual([
       "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
-      "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+      "gpt-5.6-sol", "gpt-6.1-terra", "gpt-5.6-terra", "gpt-5.6-luna",
     ]);
     expect(CODEX_TARGET.models[0]).toMatchObject({
       id: "gpt-6.1-sol", contextWindow: 272000, maxContextWindow: 872000,
@@ -91,7 +91,7 @@ describe("compatibility retained from Codex 0.159.1", () => {
     expect((await applyConfig({ target })).changed).toBe(false);
   });
 
-  test.each(["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("preserves %s through apply and doctor", async (model) => {
+  test.each(["gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-6.1-terra", "gpt-5.6-terra", "gpt-5.6-luna"])("preserves %s through apply and doctor", async (model) => {
     const target = join(await mkdtemp(join(tmpdir(), "codex-159-")), "work.config.toml");
     await writeFile(target, `model = "${model}"
 model_context_window = 600000

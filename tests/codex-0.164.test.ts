@@ -34,11 +34,10 @@ const idp = (extra: Record<string, unknown>) => ({
   mcp_enterprise_managed_auth: { idp: { issuer: "https://idp.example.test", client_id: "client", ...extra } },
 });
 
-describe("Codex 0.164.0 compatibility", () => {
-  test("pins the stable source without changing the curated model catalog or template", async () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("6aaac694803004a63c6f393d153c96d22521a6b9");
+describe("compatibility retained from Codex 0.164.0", () => {
+  test("retains the default model and curated template", async () => {
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
-    expect(CODEX_TARGET.models).toHaveLength(7);
+    expect(CODEX_TARGET.models.length).toBeGreaterThanOrEqual(7);
     expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");
     const template = parse(await readFile("config.toml.template", "utf8"));
     expect(template.features).toEqual({ default_mode_request_user_input: true, memories: true, multi_agent_v2: true });

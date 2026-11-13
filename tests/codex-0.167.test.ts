@@ -20,8 +20,7 @@ const substitution = { body_secret_substitution: { replacements: [
 const mitm = (value: Record<string, unknown>) => ({ permissions: { trusted: { network: { mitm: value } } } });
 
 describe("Codex 0.167.1 compatibility", () => {
-  test("pins the latest stable source and Terra capabilities", () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("0a94398fa60c4fac0e7659e4213a0a36e613dd46");
+  test("retains Terra capabilities", () => {
     expect(CODEX_TARGET.models).toHaveLength(8);
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.models.find(({ id }) => id === "gpt-6.1-terra")).toMatchObject({

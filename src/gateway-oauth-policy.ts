@@ -1,4 +1,5 @@
 import type { ConfigIssue } from "./codex-policy.js";
+import { validCredentialExportCommand } from "./credential-export-policy.js";
 
 // Mirrors model-provider-info/src/gateway_oauth.rs in the pinned Codex source.
 const RESERVED_HEADERS = new Set([
@@ -24,44 +25,52 @@ export function gatewayOAuthIssues(
   if (provider.aws !== undefined || isBedrock) {
     issue("gateway_oauth", "Gateway OAuth cannot be combined with AWS authentication.");
   }
-  for (const [path, value] of [
-    ["base_url", provider.base_url],
-    ["gateway_oauth.authorization_url", gateway.authorization_url],
-    ["gateway_oauth.token_url", gateway.token_url],
-  ] as const) {
+  const usesExport = gateway.credential_export !== undefined;
+  const urls: Array<[string, unknown]> = [["base_url", provider.base_url]];
+  if (usesExport) {
+    if (isRecord(gateway.credential_export) && !validCredentialExportCommand(gateway.credential_export.command)) {
+      issue("gateway_oauth.credential_export.command", "Gateway credential export requires an absolute path or a bare executable name.");
+    }
+  } else {
+    urls.push(["gateway_oauth.authorization_url", gateway.authorization_url],
+      ["gateway_oauth.token_url", gateway.token_url]);
+    if (gateway.device_authorization_url !== undefined) {
+      urls.push(["gateway_oauth.device_authorization_url", gateway.device_authorization_url]);
+    }
+    if (typeof gateway.client_id !== "string" || gateway.client_id.trim() === "") {
+      issue("gateway_oauth.client_id", "Gateway OAuth requires a nonempty client ID.");
+    }
+    if (gateway.redirect_port === 0 || gateway.redirect_port === 0n) {
+      issue("gateway_oauth.redirect_port", "Gateway OAuth redirect port must be nonzero.");
+    }
+  }
+  for (const [path, value] of urls) {
     if (!validGatewayUrl(value)) {
       issue(path, "Gateway OAuth requires HTTPS (or loopback HTTP), without URL credentials or fragments.");
     }
-  }
-  if (typeof gateway.client_id !== "string" || gateway.client_id.trim() === "") {
-    issue("gateway_oauth.client_id", "Gateway OAuth requires a nonempty client ID.");
-  }
-  if (gateway.redirect_port === 0 || gateway.redirect_port === 0n) {
-    issue("gateway_oauth.redirect_port", "Gateway OAuth redirect port must be nonzero.");
   }
   const delivery = gateway.delivery ?? { kind: "header", name: "Authorization", scheme: "Bearer" };
   if (!isRecord(delivery)) {
     return issues; // The schema reports a malformed delivery object.
   }
   const name = typeof delivery.name === "string" ? delivery.name : "";
+  const scheme = delivery.scheme ?? "Bearer";
+  const authorizationBearer = delivery.kind === "header" && name.toLowerCase() === "authorization" &&
+    typeof scheme === "string" && scheme.toLowerCase() === "bearer";
+  if ((usesExport || authorizationBearer) && provider.model_catalog_url !== undefined &&
+    (!validGatewayUrl(provider.model_catalog_url) || !validGatewayUrl(provider.base_url) ||
+      new URL(provider.model_catalog_url as string).origin !== new URL(provider.base_url as string).origin)) {
+    issue("model_catalog_url", "Gateway credential export and Authorization delivery require the catalog and base URL to share the same scheme, host, and port.");
+  }
   let header: string | undefined;
   if (delivery.kind === "header") {
     const headerName = name.toLowerCase();
     header = headerName;
-    const scheme = delivery.scheme ?? "Bearer";
-    const authorizationBearer = headerName === "authorization" &&
-      typeof scheme === "string" && scheme.toLowerCase() === "bearer";
     if (authorizationBearer) {
       if (provider.name === "Google Cloud Vertex AI" || provider.requires_openai_auth === true ||
         provider.env_key !== undefined || provider.experimental_bearer_token !== undefined ||
         isRecord(provider.auth)) {
         issue("gateway_oauth.delivery", "Gateway Authorization delivery conflicts with the provider credential; choose a custom header or cookie.");
-      }
-      if (provider.model_catalog_url !== undefined) {
-        if (!validGatewayUrl(provider.model_catalog_url) || !validGatewayUrl(provider.base_url) ||
-          new URL(provider.model_catalog_url as string).origin !== new URL(provider.base_url as string).origin) {
-          issue("model_catalog_url", "Gateway Authorization delivery requires the catalog and base URL to share the same scheme, host, and port.");
-        }
       }
     } else if (!isHttpToken(name) || !isHttpToken(scheme) ||
       RESERVED_HEADERS.has(headerName) || RESERVED_PREFIXES.some((prefix) => headerName.startsWith(prefix))) {

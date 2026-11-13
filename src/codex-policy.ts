@@ -4,6 +4,8 @@ import { Ajv, type ErrorObject, type ValidateFunction } from "ajv/dist/ajv.js";
 import { parse } from "smol-toml";
 import { LEGACY_DEFAULT_MODELS, RETIRED_TUI_KEYS, STATUS_LINE_LEGACY_IDS, TERMINAL_TITLE_LEGACY_IDS } from "./codex-migrations.js";
 import { gatewayOAuthIssues } from "./gateway-oauth-policy.js";
+import { validCredentialExportCommand } from "./credential-export-policy.js";
+import { guardianPolicyIssues } from "./guardian-policy.js";
 import { CODEX_TARGET } from "./codex-target.generated.js";
 import { defaultSchemaPath } from "./paths.js";
 
@@ -238,7 +240,9 @@ function policyIssues(parsed: unknown, options: { requireModel: boolean }): Conf
         severity: "warning",
         code: "deprecated_feature",
         path: `features.${key}`,
-        message: "This feature flag is deprecated in the targeted Codex source.",
+        message: key === "multi_agent"
+          ? "This deprecated flag still controls the V1 fallback. Use agents.enabled for agent opt-ins; explicit multi_agent_v2 enablement takes precedence. The existing value is preserved."
+          : "This feature flag is deprecated in the targeted Codex source.",
       });
     }
   }
@@ -540,6 +544,7 @@ function runtimeSemanticIssues(parsed: unknown): ConfigIssue[] {
     ...windowsSandboxIssues(parsed),
     ...networkMitmIssues(parsed),
     ...modelProviderIssues(parsed),
+    ...guardianPolicyIssues(parsed),
     ...providerSelectionIssues(parsed),
   ];
 }
@@ -963,10 +968,7 @@ function appendAwsAuthIssues(
       issues.push(runtimeIssue("model_provider_aws_export_conflict", `${basePath}.aws.credential_export`,
         "AWS credential export cannot be combined with aws.profile."));
     }
-    const command = credentialExport.command;
-    if (typeof command !== "string" || command.trim() === "" ||
-      (!isAbsolute(command) && (command.includes("/") || command === "." || command === ".." ||
-        (process.platform === "win32" && /[\\:]/.test(command))))) {
+    if (!validCredentialExportCommand(credentialExport.command)) {
       issues.push(runtimeIssue("model_provider_aws_export_command", `${basePath}.aws.credential_export.command`,
         "AWS credential export requires an absolute path or a bare executable name."));
     }

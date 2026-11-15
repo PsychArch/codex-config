@@ -1,8 +1,8 @@
 import type { ConfigIssue } from "./codex-policy.js";
 
-// guardian-context/src/budget.rs and preparation/transcript.rs in Codex 0.169.0.
+// guardian-context/src/budget.rs and preparation/transcript.rs in Codex 0.171.0-alpha.5.
 const SECTION_MINIMUMS: Readonly<Record<string, bigint>> = {
-  transcript_messages: 5000n, transcript_tools: 1000n,
+  transcript_messages: 5000n, transcript_tools: 1000n, transcript_selected_exec_results: 0n,
   root_conversation_messages: 900n, retained_user_instructions: 900n,
   trusted_user_answers: 900n, sender_user_messages: 900n, planned_action: 900n,
   previous_reviews: 900n, trusted_tools: 900n, trusted_skills: 900n,
@@ -31,9 +31,20 @@ export function guardianPolicyIssues(parsed: unknown): ConfigIssue[] {
     }
   }
   const guardian = isRecord(parsed.features) ? parsed.features.guardianv2 : undefined;
-  if (!isRecord(guardian) || guardian.sync_elastic_budgeting !== true) return issues;
-  const path = "features.guardianv2.sync_elastic_sections";
-  const sections = guardian.sync_elastic_sections;
+  if (!isRecord(guardian)) return issues;
+  for (const mode of ["sync", "async"] as const) {
+    if (guardian[`${mode}_elastic_budgeting`] !== true) continue;
+    issues.push(...elasticIssues(guardian[`${mode}_elastic_sections`], mode));
+  }
+  return issues;
+}
+
+function elasticIssues(sections: unknown, mode: "sync" | "async"): ConfigIssue[] {
+  const issues: ConfigIssue[] = [];
+  const issue = (code: string, path: string, message: string): void => {
+    issues.push({ severity: "error", code, path, message });
+  };
+  const path = `features.guardianv2.${mode}_elastic_sections`;
   if (!isRecord(sections) || Object.keys(sections).length === 0) {
     issue("guardian_elastic_sections_required", path, "Enabled Guardian elastic budgeting requires a nonempty section map.");
     return issues;
@@ -54,6 +65,20 @@ export function guardianPolicyIssues(parsed: unknown): ConfigIssue[] {
     }
     seen.add(canonical);
     if (!isRecord(limits)) { canSum = false; continue; } // Schema reports malformed limits.
+    const names = limits.nested_tool_names;
+    if (canonical === "transcript_selected_exec_results") {
+      if (mode === "async") {
+        issue("guardian_elastic_selected_exec_sync_only", sectionPath,
+          "transcript_selected_exec_results is only supported for sync elastic budgeting.");
+      }
+      if (!Array.isArray(names) || names.length === 0 || names.some((name) => typeof name !== "string" || name.trim() === "")) {
+        issue("guardian_elastic_nested_tool_names", `${sectionPath}.nested_tool_names`,
+          "Selected exec results require nonempty nested_tool_names with no blank entries.");
+      }
+    } else if (Array.isArray(names) && names.length > 0) {
+      issue("guardian_elastic_nested_tool_names", `${sectionPath}.nested_tool_names`,
+        "nested_tool_names is only supported for transcript_selected_exec_results.");
+    }
     const minimum = integer(limits.min_total_section_tokens);
     const entry = integer(limits.max_section_entry_tokens);
     const maximum = integer(limits.max_total_section_tokens);

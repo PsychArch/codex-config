@@ -18,26 +18,28 @@ Use Node.js 22.12 or later with npm or pnpm, or run it with Bun. Choose whicheve
 
 ```bash
 # npm
-npx --yes codex-config@latest apply --dry-run
+npx --yes codex-config@alpha apply --dry-run
 
 # pnpm 11 (`pn` is the short form of `pnpm`)
-pn --silent dlx codex-config@latest apply --dry-run
+pn --silent dlx codex-config@alpha apply --dry-run
 
 # Bun
-bunx codex-config@latest apply --dry-run
+bunx codex-config@alpha apply --dry-run
 ```
 
 The dry run shows which settings would be added, updated, or removed without changing a file. Happy with the plan? Run the same command without `--dry-run`:
 
 ```bash
-npx --yes codex-config@latest apply
-pn --silent dlx codex-config@latest apply
-bunx codex-config@latest apply
+npx --yes codex-config@alpha apply
+pn --silent dlx codex-config@alpha apply
+bunx codex-config@alpha apply
 ```
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This version targets Codex **0.169.0**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6.1 Terra, GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
+This prerelease targets Codex **0.171.0-alpha.5**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6.1 Terra, GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
+
+Install this prerelease with `npx --yes codex-config@alpha apply --dry-run` (or `pnpm dlx codex-config@alpha` / `bunx codex-config@alpha`). The `latest` npm tag continues to target stable Codex 0.169.0.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -66,7 +68,7 @@ Codex clamps the requested context window to the selected model's live catalog l
 By default, recommendations are added only where you have not already made a choice. Use `--force` when you deliberately want every setting managed by `codex-config` reset to the bundled profile:
 
 ```bash
-pn --silent dlx codex-config@latest apply --force
+pn --silent dlx codex-config@alpha apply --force
 ```
 
 You can also supply your own recommendations with `--template /path/to/template.toml`.
@@ -86,17 +88,17 @@ Comments and formatting are preserved when a change can be patched safely in pla
 
 ## Check and automate
 
-The examples below use `pn`; `npx --yes codex-config@latest` and `bunx codex-config@latest` accept the same commands and options.
+The examples below use `pn`; `npx --yes codex-config@alpha` and `bunx codex-config@alpha` accept the same commands and options.
 
 ```bash
 # Show pending changes without writing
-pn --silent dlx codex-config@latest diff
+pn --silent dlx codex-config@alpha diff
 
 # Exit with status 1 when an update is needed
-pn --silent dlx codex-config@latest check
+pn --silent dlx codex-config@alpha check
 
 # Validate the current config and report compatibility issues
-pn --silent dlx codex-config@latest doctor
+pn --silent dlx codex-config@alpha doctor
 ```
 
 All commands support `--json` for machine-readable output.
@@ -109,16 +111,18 @@ The template retains `tui.alternate_screen = "never"` for native scrollback. To 
 
 Codex 0.162.1 also supports custom provider capability overrides, Guardian transcript/classifier settings, microphone channel selection, transcript mouse scroll speed, and Agent Command Center grouping and shortcuts. Explicit settings are preserved and validated; these options are not added to the curated template. Codex 0.164.0 adds TUI presets, plugin defaults and remote metadata, model-request hooks, and opt-in background compaction. Codex 0.167.1 adds GPT-6.1 Terra, GCP provider support, OpenAI catalog routing, default gateway OAuth Authorization delivery, and MITM signing/body substitution.
 
-Codex 0.169.0 adds gateway credential-export commands and device-code authorization, opt-in terminal workspaces, fullscreen turn collapsing, OSC 777 notifications, and client search-provider preferences. `tui.sidebar_width_percent` accepts 1–99. These settings are supported without changing the curated template. The removed `features.plugin_discovery_prefetch` flag is cleaned up. Deprecated `features.multi_agent` values remain preserved because they still control the V1 fallback; use `agents.enabled` for agent opt-ins, accounting for explicit `multi_agent_v2` enablement. Removed Guardian prompt overrides are reported and preserved for manual review; additional enforced policy belongs in managed `requirements.toml`. See the [latest drift analysis](docs/codex-0.169.0-analysis.md) for runtime constraints and defaults.
+Codex 0.169.0 adds gateway credential-export commands and device-code authorization, opt-in terminal workspaces, fullscreen turn collapsing, OSC 777 notifications, and client search-provider preferences. `tui.sidebar_width_percent` accepts 1–99. These settings are supported without changing the curated template. The removed `features.plugin_discovery_prefetch` flag is cleaned up. Deprecated `features.multi_agent` values remain preserved because they still control the V1 fallback; use `agents.enabled` for agent opt-ins, accounting for explicit `multi_agent_v2` enablement. Removed Guardian prompt overrides are reported and preserved for manual review; additional enforced policy belongs in managed `requirements.toml`. See the [stable drift analysis](docs/codex-0.169.0-analysis.md) for runtime constraints and defaults.
 
 Retired `plugins.<plugin>.mcp_servers.<server>.ema_auth` overlays receive a doctor warning and remain preserved: Codex disables the affected plugin server while the overlay is present. Configure enterprise authentication through a trusted non-project MCP registration before manually removing the old overlay. Apply does not remove authentication policy automatically.
+
+Codex 0.171 alpha adds opt-in asynchronous Guardian elastic budgets, selected Code Mode exec-result reservations for synchronous budgets, MCP status-line providers, marketplace auto-update, and refreshable OTLP HTTP headers. Explicit settings are preserved and validated; the curated template is unchanged. See the [alpha drift analysis](docs/codex-0.171.0-alpha.5-analysis.md) for details.
 
 ## Profiles and custom paths
 
 Codex profiles use separate files under `$CODEX_HOME`:
 
 ```bash
-pn --silent dlx codex-config@latest apply --profile work
+pn --silent dlx codex-config@alpha apply --profile work
 codex --profile work
 ```
 

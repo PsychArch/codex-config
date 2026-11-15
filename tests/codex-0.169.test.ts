@@ -32,8 +32,7 @@ const elastic = (sections: Record<string, unknown> = { transcript_messages: limi
 });
 
 describe("Codex 0.169.0 compatibility", () => {
-  test("pins the stable source and retains all eight model records", () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("d32063f96c2dff1dc96af839b3952abb6acfeda4");
+  test("retains all eight model records from the stable baseline", () => {
     expect(CODEX_TARGET.models).toHaveLength(8);
     expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");

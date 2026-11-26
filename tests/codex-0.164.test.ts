@@ -36,7 +36,7 @@ const idp = (extra: Record<string, unknown>) => ({
 describe("compatibility retained from Codex 0.164.0", () => {
   test("retains the curated feature settings", async () => {
     const template = parse(await readFile("config.toml.template", "utf8"));
-    expect(template.features).toEqual({ default_mode_request_user_input: true, memories: true, multi_agent_v2: true });
+    expect(template.features).toEqual({ default_mode_request_user_input: true, memories: true });
   });
 
   test("preserves explicit new settings and unrelated provider/MCP values idempotently", async () => {

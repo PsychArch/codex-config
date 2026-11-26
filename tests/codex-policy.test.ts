@@ -66,12 +66,12 @@ redo = "ctrl-r"
     ).resolves.toEqual({ valid: true, clean: true, issues: [] });
   });
 
-  test("enables multi-agent v2 in the bundled profile", async () => {
+  test("lets Codex select the subagent version for the bundled profile", async () => {
     const template = parse(await readFile("config.toml.template", "utf8")) as {
       features?: Record<string, unknown>;
     };
 
-    expect(template.features?.multi_agent_v2).toBe(true);
+    expect(template.features).not.toHaveProperty("multi_agent_v2");
     expect(template.features).not.toHaveProperty("multi_agent");
   });
 

@@ -53,12 +53,13 @@ The bundled profile is an opinionated setup for trusted local development:
 | Live web search | Current information when a task needs it |
 | Fast service tier | Priority processing when available |
 | Memories enabled | Continuity across Codex sessions |
-| Multi-agent v2 | Task-path-based sub-agent delegation |
 | Default-mode questions | Structured user-input prompts without switching to Plan mode |
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 
 Codex clamps the requested context window to the model's live catalog limit and caps the compaction threshold against that window. The bundled GPT-6.2 Sol record caps the raw window at 872,000 tokens before operating headroom. During a normal apply, the expanded defaults follow `gpt-6.2-sol` across built-in and OpenAI-compatible provider routes. Alternate model IDs keep their own context behavior.
+
+The template leaves subagent selection to Codex. GPT-6.2 Sol declares V2 in its model catalog.
 
 > [!WARNING]
 > The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.

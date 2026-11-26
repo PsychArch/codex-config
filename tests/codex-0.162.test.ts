@@ -154,7 +154,7 @@ unknown = true
     expect(template).not.toHaveProperty("daybreak");
     expect(template).not.toHaveProperty("auto_review");
     expect(template.features).toEqual({
-      default_mode_request_user_input: true, memories: true, multi_agent_v2: true,
+      default_mode_request_user_input: true, memories: true,
     });
   });
 });

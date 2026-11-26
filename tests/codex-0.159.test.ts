@@ -11,14 +11,13 @@ import { CODEX_TARGET } from "../src/codex-target.generated.js";
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
 describe("compatibility retained from Codex 0.159.1", () => {
-  test("pins the stable release catalog and all GPT-6.1 Sol capabilities", () => {
-    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
-    expect(CODEX_TARGET.models.map(({ id }) => id)).toEqual([
+  test("retains the original supported models and current GPT-6.1 Sol capabilities", () => {
+    expect(CODEX_TARGET.models.map(({ id }) => id)).toEqual(expect.arrayContaining([
       "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
       "gpt-5.6-sol", "gpt-6.1-terra", "gpt-5.6-terra", "gpt-5.6-luna",
-    ]);
-    expect(CODEX_TARGET.models[0]).toMatchObject({
-      id: "gpt-6.1-sol", contextWindow: 272000, maxContextWindow: 872000,
+    ]));
+    expect(CODEX_TARGET.models.find(({ id }) => id === "gpt-6.1-sol")).toMatchObject({
+      id: "gpt-6.1-sol", contextWindow: 500000, maxContextWindow: 872000,
       reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
       defaultReasoningEffort: "low", defaultReasoningSummary: "none",
       supportsVerbosity: true, serviceTiers: ["priority"],
@@ -120,7 +119,7 @@ alternate_screen = "always"
     }));
     expect((await applyConfig({ target })).changed).toBe(false);
     await applyConfig({ target, force: true });
-    expect(parse(await readFile(target, "utf8")).model).toBe("gpt-6.1-sol");
+    expect(parse(await readFile(target, "utf8")).model).toBe(CODEX_TARGET.defaultModel);
   });
 
   test.each([undefined, false, true])("migrates aliases preserving canonical %s", async (canonical) => {

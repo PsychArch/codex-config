@@ -49,7 +49,7 @@ describe("cli", { timeout: 30_000 }, () => {
     expect(result.mode).toBe("override");
   });
 
-  test("defaults to GPT-6.1 Sol, preserves an existing Sol setup, and adopts GPT-6.1 Sol with force", async () => {
+  test("defaults to GPT-6.2 Sol, preserves an existing Sol setup, and adopts GPT-6.2 Sol with force", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
     const freshPath = join(directory, "fresh.toml");
     const existingPath = join(directory, "existing.toml");
@@ -61,7 +61,7 @@ url = "https://example.test/mcp"
 `, "utf8");
     await runCli(["apply", "--target", freshPath, "--json"]);
     expect(parse(await readFile(freshPath, "utf8"))).toMatchObject({
-      model: "gpt-6.1-sol", model_context_window: 1_000_000,
+      model: "gpt-6.2-sol", model_context_window: 1_000_000,
     });
     await runCli(["apply", "--target", existingPath, "--json"]);
     expect(parse(await readFile(existingPath, "utf8"))).toMatchObject({
@@ -71,23 +71,23 @@ url = "https://example.test/mcp"
     });
     await runCli(["apply", "--target", existingPath, "--force", "--json"]);
     expect(parse(await readFile(existingPath, "utf8"))).toMatchObject({
-      model: "gpt-6.1-sol", model_context_window: 1_000_000,
+      model: "gpt-6.2-sol", model_context_window: 1_000_000,
       mcp_servers: { docs: { url: "https://example.test/mcp" } },
     });
     expect(JSON.parse((await runCli(["apply", "--target", existingPath, "--json"])).stdout)
       .changed).toBe(false);
   });
 
-  test("applies expanded context to GPT-6.1 Sol across provider routes", async () => {
+  test("applies expanded context to GPT-6.2 Sol across provider routes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "codex-config-cli-"));
-    const sol61Path = join(directory, "sol61.toml");
+    const solPath = join(directory, "sol.toml");
     const gatewayPath = join(directory, "gateway.toml");
     const terraPath = join(directory, "terra.toml");
     const explicitPath = join(directory, "explicit.toml");
-    await writeFile(sol61Path, 'model = "gpt-6.1-sol"\n', "utf8");
+    await writeFile(solPath, 'model = "gpt-6.2-sol"\n', "utf8");
     await writeFile(
       gatewayPath,
-      `model = "gpt-6.1-sol"
+      `model = "gpt-6.2-sol"
 model_provider = "example-gateway"
 
 [model_providers.example-gateway]
@@ -107,26 +107,27 @@ model_auto_compact_token_limit = 450000
       "utf8",
     );
 
-    await runCli(["apply", "--target", sol61Path, "--json"]);
+    await runCli(["apply", "--target", solPath, "--json"]);
     await runCli(["apply", "--target", gatewayPath, "--json"]);
     await runCli(["apply", "--target", terraPath, "--json"]);
     await runCli(["apply", "--target", explicitPath, "--json"]);
 
-    const sol61 = parse(await readFile(sol61Path, "utf8")) as Record<string, unknown>;
+    const sol = parse(await readFile(solPath, "utf8")) as Record<string, unknown>;
     const gateway = parse(await readFile(gatewayPath, "utf8")) as Record<string, unknown>;
     const terra = parse(await readFile(terraPath, "utf8")) as Record<string, unknown>;
     const explicit = parse(await readFile(explicitPath, "utf8")) as Record<string, unknown>;
-    expect(sol61.model_context_window).toBe(1_000_000);
-    expect(sol61.model_auto_compact_token_limit).toBe(900_000);
+    expect(sol.model_context_window).toBe(1_000_000);
+    expect(sol.model_auto_compact_token_limit).toBe(900_000);
     expect(gateway.model_context_window).toBe(1_000_000);
     expect(gateway.model_auto_compact_token_limit).toBe(900_000);
     expect(terra).not.toHaveProperty("model_context_window");
     expect(terra).not.toHaveProperty("model_auto_compact_token_limit");
+    expect(explicit.model).toBe("gpt-6.1-sol");
     expect(explicit.model_context_window).toBe(500_000);
     expect(explicit.model_auto_compact_token_limit).toBe(450_000);
 
     const second = JSON.parse(
-      (await runCli(["apply", "--target", sol61Path, "--json"])).stdout,
+      (await runCli(["apply", "--target", solPath, "--json"])).stdout,
     ) as { changed: boolean };
     expect(second.changed).toBe(false);
 
@@ -223,7 +224,7 @@ view_image_tool = true
     await runCli(["apply", "--template", templatePath, "--target", targetPath, "--json"]);
     const applied = parse(await readFile(targetPath, "utf8")) as Record<string, unknown>;
     expect(applied).toMatchObject({
-      model: "gpt-6.1-sol",
+      model: "gpt-6.2-sol",
       default_permissions: ":danger-full-access",
       features: { memories: true },
     });

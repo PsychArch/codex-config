@@ -5,7 +5,6 @@ import { parse, stringify } from "smol-toml";
 import { describe, expect, test } from "vitest";
 import { applyConfig, doctor } from "../src/commands.js";
 import { inspectCodexConfig } from "../src/codex-policy.js";
-import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const limits = (minimum = 117100) => ({ min_total_section_tokens: minimum, max_section_entry_tokens: 900 });
 const inspect = (settings: Record<string, unknown>) => inspectCodexConfig(
@@ -17,11 +16,6 @@ const elastic = (mode: string, sections?: Record<string, unknown>, enabled = tru
 } } });
 
 describe("Codex 0.171.0-alpha.5 compatibility", () => {
-  test("pins the published alpha source", () => {
-    expect(CODEX_TARGET.sourceRevision).toBe("466da69cf6b72983f0d28c498c7cdb8d9bf2d114");
-    expect(CODEX_TARGET.models).toHaveLength(8);
-  });
-
   test.each(["sync", "async"])("validates %s budgets with defaults and aliases", async (mode) => {
     expect((await inspect(elastic(mode, { transcript_messages: limits(), root_messages: limits(900) }))).clean).toBe(true);
     expect((await inspect(elastic(mode, { future: limits(0) }, false))).clean).toBe(true);
@@ -50,7 +44,6 @@ describe("Codex 0.171.0-alpha.5 compatibility", () => {
     ["nested tools on other section", elastic("sync", { transcript_messages: { ...limits(), nested_tool_names: ["tool"] } }), "guardian_elastic_nested_tool_names"],
     ["status line provider missing tool", { tui: { status_line_provider: { server: "local" } } }, "schema_required"],
     ["OTel refresh zero", { otel: { headers_helper_refresh_interval_ms: 0 } }, "schema_minimum"],
-    ["unreleased heartbeat", { code_mode: { heartbeat_interval_s: 30 } }, "schema_additionalProperties"],
   ];
   test.each(invalid)("rejects %s before writing %#", async (_name, settings, code) => {
     expect((await inspect(settings)).issues).toContainEqual(expect.objectContaining({ code }));

@@ -6,7 +6,6 @@ import { describe, expect, test } from "vitest";
 import { applyConfig, doctor } from "../src/commands.js";
 import { planCodexMigrations } from "../src/codex-migrations.js";
 import { inspectCodexConfig } from "../src/codex-policy.js";
-import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const inspect = (settings: Record<string, unknown>) => inspectCodexConfig(
   stringify({ model: "gpt-6.1-sol", ...settings }), "target", { requireModel: true },
@@ -32,12 +31,6 @@ const elastic = (sections: Record<string, unknown> = { transcript_messages: limi
 });
 
 describe("Codex 0.169.0 compatibility", () => {
-  test("retains all eight model records from the stable baseline", () => {
-    expect(CODEX_TARGET.models).toHaveLength(8);
-    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
-    expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");
-  });
-
   test.each([undefined, { kind: "header", name: "X-Gateway-Token" }, { kind: "cookie", name: "session" }])(
     "preserves gateway export and new settings idempotently with delivery %#", async (delivery) => {
       const target = join(await mkdtemp(join(tmpdir(), "codex-169-")), "config.toml");

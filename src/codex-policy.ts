@@ -542,11 +542,75 @@ function runtimeSemanticIssues(parsed: unknown): ConfigIssue[] {
     ...enterpriseIdpIssues(parsed),
     ...tuiPresetIssues(parsed),
     ...windowsSandboxIssues(parsed),
+    ...transparentTcpIssues(parsed),
     ...networkMitmIssues(parsed),
     ...modelProviderIssues(parsed),
     ...guardianPolicyIssues(parsed),
+    ...rolloutBudgetIssues(parsed),
     ...providerSelectionIssues(parsed),
   ];
+}
+
+function rolloutBudgetIssues(parsed: unknown): ConfigIssue[] {
+  const path = "features.rollout_budget";
+  const budget = getPath(parsed, ["features", "rollout_budget"]);
+  const missingLimit = () => runtimeIssue("rollout_budget_limit_required", path,
+    "An enabled rollout budget requires limit_tokens or limit_budget.");
+  if (budget === true) {
+    return [missingLimit()];
+  }
+  if (!isRecord(budget)) {
+    return [];
+  }
+  if (budget.limit_tokens !== undefined && budget.limit_budget !== undefined) {
+    return [runtimeIssue("rollout_budget_conflicting_limits", path,
+      "Set either limit_tokens or limit_budget.")];
+  }
+  if (budget.enabled !== true) {
+    return [];
+  }
+  if (budget.limit_tokens === undefined && budget.limit_budget === undefined) {
+    return [missingLimit()];
+  }
+
+  const reminders = budget.reminder_at_remaining_tokens;
+  const reminderPath = `${path}.reminder_at_remaining_tokens`;
+  if (reminders === undefined) {
+    return [runtimeIssue("rollout_budget_reminders_required", reminderPath,
+      "An enabled rollout budget requires an explicit reminder threshold array.")];
+  }
+  if (!Array.isArray(reminders)) {
+    return [];
+  }
+
+  // A whole-token limit remains exact. A fractional limit is an upstream f64,
+  // rounded up before comparison with exact integer thresholds.
+  let limit = tomlInteger(budget.limit_tokens);
+  const fractionalLimit = budget.limit_budget;
+  if (typeof fractionalLimit === "number" || typeof fractionalLimit === "bigint") {
+    const allowance = Number(fractionalLimit);
+    if (Number.isFinite(allowance) && allowance > 0) {
+      limit = BigInt(Math.ceil(allowance));
+    }
+  }
+  if (limit === undefined || limit <= 0n) {
+    return []; // The schema reports invalid allowances.
+  }
+  const upperBound = limit;
+  return reminders.flatMap((value, index) => {
+    const threshold = tomlInteger(value);
+    return threshold !== undefined && (threshold <= 0n || threshold >= upperBound)
+      ? [runtimeIssue("rollout_budget_invalid_threshold", `${reminderPath}.${index}`,
+        "Reminder thresholds must be positive and below the rollout allowance.")]
+      : [];
+  });
+}
+
+function tomlInteger(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  return typeof value === "number" && Number.isSafeInteger(value) ? BigInt(value) : undefined;
 }
 
 function tomlIntegerRangeIssues(parsed: unknown): ConfigIssue[] {
@@ -753,6 +817,41 @@ function windowsSandboxIssues(parsed: unknown): ConfigIssue[] {
     ? [runtimeIssue("windows_mxc_disabled", "windows.sandbox",
       'windows.sandbox = "mxc" is not allowed when windows.allow_mxc = false.')]
     : [];
+}
+
+function transparentTcpIssues(parsed: unknown): ConfigIssue[] {
+  const path = "features.network_proxy";
+  const proxy = getPath(parsed, ["features", "network_proxy"]);
+  const settings = isRecord(proxy) ? proxy : undefined;
+  if (proxy !== true && settings?.enabled !== true) {
+    return [];
+  }
+  const conflict = (settingPath: string) => runtimeIssue(
+    "network_transparent_tcp_requires_socks5", settingPath,
+    "Transparent TCP requires an enabled managed SOCKS5 proxy.",
+  );
+  if (settings?.transparent_tcp === true && settings.enable_socks5 === false) {
+    return [conflict(`${path}.transparent_tcp`)];
+  }
+
+  const name = getPath(parsed, ["default_permissions"]);
+  if (typeof name !== "string") {
+    return [];
+  }
+  const profile = getPath(parsed, ["permissions", name]);
+  if (!isRecord(profile) || profile.extends !== undefined ||
+    !isRecord(profile.network) || profile.network.enabled !== true) {
+    return [];
+  }
+  const transparentTcp = settings?.transparent_tcp ?? profile.network.transparent_tcp;
+  const socks5 = settings?.enable_socks5 ?? profile.network.enable_socks5;
+  if (transparentTcp !== true || socks5 !== false) {
+    return [];
+  }
+  const source = settings?.transparent_tcp === true
+    ? path
+    : `permissions.${formatPathSegment(name)}.network`;
+  return [conflict(`${source}.transparent_tcp`)];
 }
 
 function networkMitmIssues(parsed: unknown): ConfigIssue[] {

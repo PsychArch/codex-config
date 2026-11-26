@@ -18,28 +18,26 @@ Use Node.js 22.12 or later with npm or pnpm, or run it with Bun. Choose whicheve
 
 ```bash
 # npm
-npx --yes codex-config@alpha apply --dry-run
+npx --yes codex-config@latest apply --dry-run
 
 # pnpm 11 (`pn` is the short form of `pnpm`)
-pn --silent dlx codex-config@alpha apply --dry-run
+pn --silent dlx codex-config@latest apply --dry-run
 
 # Bun
-bunx codex-config@alpha apply --dry-run
+bunx codex-config@latest apply --dry-run
 ```
 
 The dry run shows which settings would be added, updated, or removed without changing a file. Happy with the plan? Run the same command without `--dry-run`:
 
 ```bash
-npx --yes codex-config@alpha apply
-pn --silent dlx codex-config@alpha apply
-bunx codex-config@alpha apply
+npx --yes codex-config@latest apply
+pn --silent dlx codex-config@latest apply
+bunx codex-config@latest apply
 ```
 
 This updates `$CODEX_HOME/config.toml`, or `~/.codex/config.toml` when `CODEX_HOME` is not set. Run it again after a Codex upgrade. Repeated runs produce the same result.
 
-This prerelease targets Codex **0.171.0-alpha.5**, with **GPT-6.1 Sol** as the bundled default and support for GPT-6.1 Terra, GPT-6 Astra, Sol and Luna plus GPT-5.6 Sol, Terra, and Luna. GPT-6 Sol and Luna require Codex 0.155.0 or later; Astra and GPT-6.1 Sol declare a minimum client version of 0.153.0 in the catalog; the bundled GPT-6.1 Sol entry first ships in 0.159.1. Normal apply preserves an existing supported model selection; `--force` adopts the bundled GPT-6.1 Sol profile.
-
-Install this prerelease with `npx --yes codex-config@alpha apply --dry-run` (or `pnpm dlx codex-config@alpha` / `bunx codex-config@alpha`). The `latest` npm tag continues to target stable Codex 0.169.0.
+This release targets Codex **0.172.0**. **GPT-6.2 Sol** is the bundled default, and the catalog includes GPT-6.2 Astra and the eight previously supported models. Both GPT-6.2 entries declare a minimum client version of 0.166.0 in the upstream catalog. Normal apply preserves existing model selections and context settings. Use `--force` to adopt the bundled GPT-6.2 Sol profile.
 
 Package versions follow the Codex CLI version used for compatibility testing, so it is easy to see which Codex release a package targets.
 
@@ -49,8 +47,8 @@ The bundled profile is an opinionated setup for trusted local development:
 
 | Setting | What you get |
 | --- | --- |
-| `gpt-6.1-sol` | The default model for the targeted Codex release |
-| Expanded GPT-6.1 Sol context | Requests a 1,000,000-token window and compaction around 900,000 tokens |
+| `gpt-6.2-sol` | The default model for the targeted Codex release |
+| Expanded GPT-6.2 Sol context | Requests a 1,000,000-token window and a 900,000-token compaction threshold |
 | High reasoning effort | More reasoning for coding and planning tasks |
 | Live web search | Current information when a task needs it |
 | Fast service tier | Priority processing when available |
@@ -60,7 +58,7 @@ The bundled profile is an opinionated setup for trusted local development:
 | Analytics disabled | Less telemetry |
 | Status line and terminal title | Useful model, project, context, limit, and task state at a glance |
 
-Codex clamps the requested context window to the selected model's live catalog limit and reserves its own operating headroom, so the usable capacity shown in a session can be lower than one million tokens. During a normal apply, the expanded defaults follow the `gpt-6.1-sol` model across built-in and OpenAI-compatible provider routes; alternate model IDs keep their own context behavior.
+Codex clamps the requested context window to the model's live catalog limit and caps the compaction threshold against that window. The bundled GPT-6.2 Sol record caps the raw window at 872,000 tokens before operating headroom. During a normal apply, the expanded defaults follow `gpt-6.2-sol` across built-in and OpenAI-compatible provider routes. Alternate model IDs keep their own context behavior.
 
 > [!WARNING]
 > The bundled profile also sets `approval_policy = "never"` and `default_permissions = ":danger-full-access"`. It is designed for a trusted local machine, not an untrusted repository or shared environment. Review [`config.toml.template`](config.toml.template) before applying it if that permission level is not appropriate for you.
@@ -68,7 +66,7 @@ Codex clamps the requested context window to the selected model's live catalog l
 By default, recommendations are added only where you have not already made a choice. Use `--force` when you deliberately want every setting managed by `codex-config` reset to the bundled profile:
 
 ```bash
-pn --silent dlx codex-config@alpha apply --force
+pn --silent dlx codex-config@latest apply --force
 ```
 
 You can also supply your own recommendations with `--template /path/to/template.toml`.
@@ -80,7 +78,7 @@ Compatibility migrations are intentionally more selective than replacing the who
 - migrates legacy sandbox permissions, approval policies, feature aliases, config-key aliases, web-search flags, memory settings, and terminal display identifiers;
 - moves `orchestrator.skills.enabled` to `cloud.skills.enabled` and `features.transcript_v2` to `tui.fullscreen_transcript`, preserving canonical settings;
 - removes settings and feature flags that the targeted Codex release no longer uses;
-- migrates the former bundled GPT-5.5 default to GPT-6.1 Sol, while preserving unfamiliar model IDs and reporting their capabilities as unverified;
+- migrates the former bundled GPT-5.5 default to GPT-6.2 Sol, while preserving unfamiliar model IDs and reporting their capabilities as unverified;
 - preserves supported model choices, custom provider models, customized workspace sandboxes, MCP servers, projects, providers, notices, and unrelated settings;
 - validates the final result before writing it.
 
@@ -88,22 +86,22 @@ Comments and formatting are preserved when a change can be patched safely in pla
 
 ## Check and automate
 
-The examples below use `pn`; `npx --yes codex-config@alpha` and `bunx codex-config@alpha` accept the same commands and options.
+The examples below use `pn`. `npx --yes codex-config@latest` and `bunx codex-config@latest` accept the same commands and options.
 
 ```bash
 # Show pending changes without writing
-pn --silent dlx codex-config@alpha diff
+pn --silent dlx codex-config@latest diff
 
 # Exit with status 1 when an update is needed
-pn --silent dlx codex-config@alpha check
+pn --silent dlx codex-config@latest check
 
 # Validate the current config and report compatibility issues
-pn --silent dlx codex-config@alpha doctor
+pn --silent dlx codex-config@latest doctor
 ```
 
 All commands support `--json` for machine-readable output.
 
-Doctor also checks GCP overrides, OpenAI catalog URLs, gateway OAuth and credential-export delivery, device authorization URLs, Guardian elastic budgets, AWS credential-export conflicts, confidential MCP enterprise OAuth, TUI presets, Windows sandbox conflicts, and versioned network MITM rules. An unfamiliar model produces a warning and a nonzero doctor exit status; normal apply preserves it. `--force` selects the bundled GPT-6.1 Sol model.
+Doctor also checks GCP overrides, OpenAI catalog URLs, gateway OAuth and credential-export delivery, device authorization URLs, Guardian elastic budgets and instruction caps, rollout budgets, transparent TCP and SOCKS5 combinations, AWS credential-export conflicts, confidential MCP enterprise OAuth, TUI presets, Windows sandbox conflicts, and versioned network MITM rules. An unfamiliar model produces a warning and a nonzero doctor exit status. Normal apply preserves it, and `--force` selects the bundled GPT-6.2 Sol model.
 
 `analytics.enabled = false` disables OpenAI analytics. Custom OTLP metrics exporters remain active unless `otel.metrics_exporter = "none"` is set; existing exporter choices are preserved.
 
@@ -115,14 +113,14 @@ Codex 0.169.0 adds gateway credential-export commands and device-code authorizat
 
 Retired `plugins.<plugin>.mcp_servers.<server>.ema_auth` overlays receive a doctor warning and remain preserved: Codex disables the affected plugin server while the overlay is present. Configure enterprise authentication through a trusted non-project MCP registration before manually removing the old overlay. Apply does not remove authentication policy automatically.
 
-Codex 0.171 alpha adds opt-in asynchronous Guardian elastic budgets, selected Code Mode exec-result reservations for synchronous budgets, MCP status-line providers, marketplace auto-update, and refreshable OTLP HTTP headers. Explicit settings are preserved and validated; the curated template is unchanged. See the [alpha drift analysis](docs/codex-0.171.0-alpha.5-analysis.md) for details.
+Codex 0.172.0 supports opt-in asynchronous Guardian elastic budgets, selected Code Mode exec-result reservations, MCP status-line providers, marketplace auto-update, and refreshable OTLP HTTP headers carried forward from the alpha. It also supports response processing, rollout trace limits, Code Mode heartbeats, and per-tool connected-app approval reviewers. Optional stdio MCP servers with cached tool lists start lazily by default. The obsolete `features.code_mode_host_grpc` flag is removed during apply. See the [0.172.0 drift analysis](docs/codex-0.172.0-analysis.md).
 
 ## Profiles and custom paths
 
 Codex profiles use separate files under `$CODEX_HOME`:
 
 ```bash
-pn --silent dlx codex-config@alpha apply --profile work
+pn --silent dlx codex-config@latest apply --profile work
 codex --profile work
 ```
 

@@ -1,6 +1,6 @@
 {
   "name": "codex-config",
-  "version": "0.171.0-alpha.5",
+  "version": "0.172.0",
   "description": "Keep Codex config.toml current for GPT-6 and GPT-5.6 models without overwriting unrelated settings.",
   "type": "module",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/cli.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "tsx src/cli.ts",

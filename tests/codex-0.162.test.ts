@@ -11,9 +11,7 @@ import { CODEX_TARGET } from "../src/codex-target.generated.js";
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
 describe("compatibility retained from Codex 0.162.1", () => {
-  test("retains the default and model capabilities", () => {
-    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
-    expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");
+  test("retains the retired patch flag metadata", () => {
     expect(CODEX_TARGET.removedFeatureKeys).toContain("apply_patch_preserve_line_endings");
   });
 

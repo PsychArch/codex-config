@@ -6,7 +6,6 @@ import { describe, expect, test } from "vitest";
 import { applyConfig, doctor } from "../src/commands.js";
 import { planCodexMigrations } from "../src/codex-migrations.js";
 import { inspectCodexConfig } from "../src/codex-policy.js";
-import { CODEX_TARGET } from "../src/codex-target.generated.js";
 
 const inspect = (text: string) => inspectCodexConfig(text, "target", { requireModel: true });
 
@@ -35,10 +34,7 @@ const idp = (extra: Record<string, unknown>) => ({
 });
 
 describe("compatibility retained from Codex 0.164.0", () => {
-  test("retains the default model and curated template", async () => {
-    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
-    expect(CODEX_TARGET.models.length).toBeGreaterThanOrEqual(7);
-    expect(CODEX_TARGET.minimumClientVersion).toBe("0.155.0");
+  test("retains the curated feature settings", async () => {
     const template = parse(await readFile("config.toml.template", "utf8"));
     expect(template.features).toEqual({ default_mode_request_user_input: true, memories: true, multi_agent_v2: true });
   });

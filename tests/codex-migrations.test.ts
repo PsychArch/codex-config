@@ -71,7 +71,7 @@ url = "https://example.test/jina"
     const parsed = parse(plan.outputText) as Record<string, any>;
     const second = planCodexMigrations(plan.outputText);
 
-    expect(parsed.model).toBe("gpt-6.1-sol");
+    expect(parsed.model).toBe(CODEX_TARGET.defaultModel);
     expect(parsed.default_permissions).toBe(":danger-full-access");
     expect(parsed).not.toHaveProperty("sandbox_mode");
     expect(parsed).not.toHaveProperty("personality");
@@ -967,28 +967,28 @@ ui = "custom-client-state"
 });
 
 describe("adaptCodexTemplate", () => {
-  const template = `model = "gpt-6.1-sol"
+  const template = `model = "${CODEX_TARGET.defaultModel}"
 model_context_window = 1000000
 model_auto_compact_token_limit = 900000
 default_permissions = ":danger-full-access"
 `;
 
-  test("keeps expanded context defaults for GPT-6.1 Sol", () => {
-    expect(parse(adaptCodexTemplate('model = "gpt-6.1-sol"\n', template))).toEqual(
+  test("keeps expanded context defaults for the bundled default", () => {
+    expect(parse(adaptCodexTemplate(`model = "${CODEX_TARGET.defaultModel}"\n`, template))).toEqual(
       parse(template),
     );
     expect(parse(adaptCodexTemplate("", template))).toEqual(parse(template));
   });
 
-  test("keeps GPT-6.1 Sol context defaults through generic provider routes", () => {
+  test("keeps the bundled default's context settings through generic provider routes", () => {
     const provider = adaptCodexTemplate(
-      `model = "gpt-6.1-sol"
+      `model = "${CODEX_TARGET.defaultModel}"
 model_provider = "example-gateway"
 `,
       template,
     );
     const baseUrl = adaptCodexTemplate(
-      `model = "gpt-6.1-sol"
+      `model = "${CODEX_TARGET.defaultModel}"
 openai_base_url = "https://gateway.example.test/v1"
 `,
       template,
@@ -998,8 +998,9 @@ openai_base_url = "https://gateway.example.test/v1"
     expect(parse(baseUrl)).toEqual(parse(template));
   });
 
-  test("does not inject GPT-6.1 Sol context defaults into alternate or custom models", () => {
-    const astra = parse(adaptCodexTemplate('model = "gpt-6-astra"\n', template));
+  test("does not inject bundled context defaults into alternate or custom models", () => {
+    const priorDefault = parse(adaptCodexTemplate('model = "gpt-6.1-sol"\n', template));
+    const astra = parse(adaptCodexTemplate('model = "gpt-6.2-astra"\n', template));
     const terra = parse(adaptCodexTemplate('model = "gpt-5.6-terra"\n', template));
     const custom = parse(
       adaptCodexTemplate(
@@ -1011,9 +1012,10 @@ model_provider = "example-gateway"
     );
 
     expect(terra).toEqual({
-      model: "gpt-6.1-sol",
+      model: CODEX_TARGET.defaultModel,
       default_permissions: ":danger-full-access",
     });
+    expect(priorDefault).toEqual(terra);
     expect(astra).toEqual(terra);
     expect(custom).toEqual(terra);
   });
@@ -1028,6 +1030,6 @@ writable_roots = ["/workspace/cache"]
       template,
     );
 
-    expect(parse(adapted)).toEqual({ model: "gpt-6.1-sol" });
+    expect(parse(adapted)).toEqual({ model: CODEX_TARGET.defaultModel });
   });
 });

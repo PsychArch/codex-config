@@ -21,8 +21,6 @@ const mitm = (value: Record<string, unknown>) => ({ permissions: { trusted: { ne
 
 describe("Codex 0.167.1 compatibility", () => {
   test("retains Terra capabilities", () => {
-    expect(CODEX_TARGET.models).toHaveLength(8);
-    expect(CODEX_TARGET.defaultModel).toBe("gpt-6.1-sol");
     expect(CODEX_TARGET.models.find(({ id }) => id === "gpt-6.1-terra")).toMatchObject({
       contextWindow: 500000, maxContextWindow: 872000, minimumClientVersion: "0.153.0",
       reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],

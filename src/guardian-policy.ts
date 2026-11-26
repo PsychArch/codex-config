@@ -1,6 +1,6 @@
 import type { ConfigIssue } from "./codex-policy.js";
 
-// guardian-context/src/budget.rs and preparation/transcript.rs in Codex 0.171.0-alpha.5.
+// guardian-context/src/budget.rs and preparation/transcript.rs in Codex.
 const SECTION_MINIMUMS: Readonly<Record<string, bigint>> = {
   transcript_messages: 5000n, transcript_tools: 1000n, transcript_selected_exec_results: 0n,
   root_conversation_messages: 900n, retained_user_instructions: 900n,
@@ -30,11 +30,41 @@ export function guardianPolicyIssues(parsed: unknown): ConfigIssue[] {
       }
     }
   }
-  const guardian = isRecord(parsed.features) ? parsed.features.guardianv2 : undefined;
+  if (!isRecord(parsed.features)) return issues;
+  issues.push(...instructionLimitIssues(parsed.features.guardianv3));
+  const guardian = parsed.features.guardianv2;
   if (!isRecord(guardian)) return issues;
   for (const mode of ["sync", "async"] as const) {
     if (guardian[`${mode}_elastic_budgeting`] !== true) continue;
     issues.push(...elasticIssues(guardian[`${mode}_elastic_sections`], mode));
+  }
+  return issues;
+}
+
+function instructionLimitIssues(guardian: unknown): ConfigIssue[] {
+  if (!isRecord(guardian)) return [];
+  const limit = integer(guardian.max_instruction_tokens);
+  if (limit === undefined || limit < 0n) return [];
+  const prompts = [
+    ["housekeeper", "routing_instructions"],
+    ["reviewer", "retrieval_instructions"],
+  ] as const;
+  const issues: ConfigIssue[] = [];
+  for (const [section, key] of prompts) {
+    const settings = guardian[section];
+    if (!isRecord(settings)) continue;
+    const prompt = settings[key];
+    if (typeof prompt !== "string") continue;
+    const trimmed = prompt.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+    const tokens = Math.ceil(Buffer.byteLength(trimmed, "utf8") / 4);
+    if (BigInt(tokens) > limit) {
+      issues.push({
+        severity: "error",
+        code: "guardian_instruction_token_limit",
+        path: `features.guardianv3.${section}.${key}`,
+        message: `Estimated ${tokens} tokens exceeds max_instruction_tokens = ${limit}.`,
+      });
+    }
   }
   return issues;
 }
